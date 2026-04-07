@@ -21,17 +21,50 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     const [isAuthorized, setIsAuthorized] = useState(false)
 
     useEffect(() => {
-        console.log('[AdminLayout] Demo mode - checking Redux state')
-        
-        // In demo mode, trust middleware and skip API calls
-        if (user && user.role === 'admin') {
-            console.log('[AdminLayout] Admin user in Redux - authorized')
-            setIsAuthorized(true)
-            dispatch(setLoading(false))
-        } else {
-            console.log('[AdminLayout] No admin user in Redux - redirecting')
+        const checkAuth = async () => {
+            console.log('[AdminLayout] Demo mode - checking Redux state')
+            
+            // Check if user already in Redux
+            if (user && user.role === 'admin') {
+                console.log('[AdminLayout] Admin user in Redux - authorized')
+                setIsAuthorized(true)
+                dispatch(setLoading(false))
+                return
+            }
+
+            // Try to restore user from cookie (demo mode - simple decode)
+            console.log('[AdminLayout] No user in Redux, checking cookie')
+            try {
+                const cookies = document.cookie.split(';')
+                const authCookie = cookies.find(c => c.trim().startsWith('auth-token='))
+                
+                if (authCookie) {
+                    const token = authCookie.split('=')[1]
+                    // Simple decode for demo - get payload
+                    const payload = JSON.parse(atob(token.split('.')[1]))
+                    
+                    if (payload.role === 'admin') {
+                        console.log('[AdminLayout] Restored admin from cookie')
+                        dispatch(setUser({
+                            id: payload.sub,
+                            email: payload.email,
+                            name: payload.name,
+                            role: payload.role
+                        }))
+                        setIsAuthorized(true)
+                        dispatch(setLoading(false))
+                        return
+                    }
+                }
+            } catch (error) {
+                console.error('[AdminLayout] Cookie decode failed:', error)
+            }
+
+            console.log('[AdminLayout] No admin user found - redirecting')
             dispatch(setLoading(false))
         }
+
+        checkAuth()
     }, [dispatch, user])
 
     useEffect(() => {
