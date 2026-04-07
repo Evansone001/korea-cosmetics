@@ -80,6 +80,8 @@ function LoginContent({ router, dispatch, redirect }: {
                         finalRedirect = '/admin'
                     } else if (data.user?.role === 'seller') {
                         finalRedirect = '/store'
+                    } else if (data.user?.role === 'customer') {
+                        finalRedirect = '/orders'
                     }
                 }
                 
