@@ -21,50 +21,19 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     const [isAuthorized, setIsAuthorized] = useState(false)
 
     useEffect(() => {
-        const checkAuth = async () => {
-            console.log('[AdminLayout] checkAuth starting')
-            
-            // Check if user already in Redux
-            console.log('[AdminLayout] Redux user state:', { user, isAuthenticated, userRole: user?.role })
-            
-            if (user && user.role === 'admin') {
-                console.log('[AdminLayout] User already in Redux with admin role, authorizing')
-                setIsAuthorized(true)
-                dispatch(setLoading(false))
-                return
-            }
-
-            // Try to verify token via API (cookie is sent automatically)
-            console.log('[AdminLayout] Calling /api/auth/verify')
-            try {
-                const response = await fetch('/api/auth/verify', {
-                    credentials: 'include'
-                })
-                const data = await response.json()
-                console.log('[AdminLayout] Verify response:', { success: data.success, user: data.user })
-                
-                if (data.success && data.user) {
-                    console.log('[AdminLayout] Setting user in Redux, role:', data.user.role)
-                    dispatch(setUser(data.user))
-                    if (data.user.role === 'admin') {
-                        console.log('[AdminLayout] Authorizing admin')
-                        setIsAuthorized(true)
-                        dispatch(setLoading(false))
-                    } else {
-                        console.log('[AdminLayout] User not admin, setting loading false')
-                        dispatch(setLoading(false))
-                    }
-                } else {
-                    console.log('[AdminLayout] Verify failed, setting loading false')
-                    dispatch(setLoading(false))
-                }
-            } catch (error) {
-                console.error('[AdminLayout] Auth check failed:', error)
-                dispatch(setLoading(false))
-            }
+        console.log('[AdminLayout] Checking auth state')
+        
+        // Trust middleware - if user is in Redux, they're already authenticated
+        if (user && user.role === 'admin') {
+            console.log('[AdminLayout] Admin user authorized')
+            setIsAuthorized(true)
+            dispatch(setLoading(false))
+            return
         }
 
-        checkAuth()
+        // If no user in Redux, redirect to login
+        console.log('[AdminLayout] No user in Redux, redirecting')
+        dispatch(setLoading(false))
     }, [dispatch, user])
 
     useEffect(() => {
