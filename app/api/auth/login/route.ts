@@ -102,7 +102,7 @@ export async function POST(request: Request) {
     console.log('[Login API] Setting cookie, token length:', token?.length);
     response.cookies.set('auth-token', token, {
       httpOnly: true,
-      secure: false,
+      secure: true,
       sameSite: 'lax',
       maxAge: 24 * 60 * 60,
       path: '/',

@@ -71,12 +71,24 @@ function LoginContent({ router, dispatch, redirect }: {
             if (response.ok && data.success) {
                 console.log('[Login] Login successful, dispatching setUser with role:', data.user?.role)
                 dispatch(setUser(data.user))
-                console.log('[Login] Redux dispatch complete, redirecting to:', redirect)
+                
+                // Role-based redirect logic
+                let finalRedirect = redirect
+                if (redirect === '/') {
+                    // Only apply role-based redirect if no specific redirect was requested
+                    if (data.user?.role === 'admin') {
+                        finalRedirect = '/admin'
+                    } else if (data.user?.role === 'seller') {
+                        finalRedirect = '/store'
+                    }
+                }
+                
+                console.log('[Login] Redux dispatch complete, redirecting to:', finalRedirect)
                 
                 // Small delay to ensure Redux updates
                 setTimeout(() => {
-                    console.log('[Login] Executing redirect to:', redirect)
-                    router.push(redirect)
+                    console.log('[Login] Executing redirect to:', finalRedirect)
+                    router.push(finalRedirect)
                 }, 100)
             } else {
                 console.log('[Login] Login failed:', data.error)

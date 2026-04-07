@@ -47,9 +47,9 @@ export async function POST(request: Request) {
 
     response.cookies.set('auth-token', token, {
       httpOnly: true,
-      secure: false, // Allow non-secure in development
-      sameSite: 'lax', // Changed from strict to allow redirects
-      maxAge: 24 * 60 * 60, // 24 hours
+      secure: true,
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60,
       path: '/',
     });
 
