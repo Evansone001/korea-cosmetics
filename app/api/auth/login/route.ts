@@ -15,7 +15,9 @@ interface User {
 // POST - Login
 export async function POST(request: Request) {
   try {
-    const { email, password } = await request.json();
+    const { email: rawEmail, password: rawPassword } = await request.json();
+    const email = rawEmail?.trim().toLowerCase();
+    const password = rawPassword?.trim();
 
     if (!email || !password) {
       return NextResponse.json(
@@ -26,6 +28,8 @@ export async function POST(request: Request) {
 
     // Demo authentication - replace with database lookup
     let user: User | null = null;
+    
+    console.log('[Login API] Attempting login:', { email, passwordLength: password?.length, expectedEmail: 'admin@koreabeauty.com' });
 
     if (email === 'admin@koreabeauty.com' && password === 'admin123') {
       user = {
