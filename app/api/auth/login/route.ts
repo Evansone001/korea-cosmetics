@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { generateToken } from '@/lib/jwt';
-import { logUserAction } from '@/lib/services/userActionLog';
-import { UserAction } from '@prisma/client';
+import { logUserAction, type UserAction } from '@/lib/services/userActionLog';
 
 // JWT secret - in production, use a proper secret from env
 const JWT_SECRET = process.env.JWT_SECRET || 'demo-secret-change-in-production';
@@ -83,7 +82,7 @@ export async function POST(request: Request) {
       userId: user.id,
       userName: user.name,
       userEmail: user.email,
-      action: UserAction.LOGIN,
+      action: 'LOGIN',
       ipAddress: ip,
       userAgent: userAgent,
     }).catch(err => console.error('Failed to log login action:', err));
