@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { UserAction } from '@prisma/client'
 import {
   getUserActions,
   getAllActions,
   getRecentActions,
   cleanupOldLogs,
+  type UserAction,
 } from '@/lib/services/userActionLog'
 
 // GET /api/admin/user-actions - Get user actions with filtering
