@@ -1,6 +1,6 @@
-# Contributing to GoCart
+# Contributing to korea-cosmetics
 
-Thank you for considering contributing to **GoCart**!
+Thank you for considering contributing to **korea-cosmetics**!
 We welcome contributions from everyone, whether it's fixing a bug, adding a new feature, or optimizing the codebase.
 
 ---

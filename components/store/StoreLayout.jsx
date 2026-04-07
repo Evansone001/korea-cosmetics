@@ -1,47 +1,123 @@
 'use client'
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import Loading from "../Loading"
 import Link from "next/link"
 import { ArrowRightIcon } from "lucide-react"
 import SellerNavbar from "./StoreNavbar"
 import SellerSidebar from "./StoreSidebar"
-import { dummyStoreData } from "@/assets/assets"
+import { useAppSelector, useAppDispatch } from "@/lib/hooks"
+import { setUser, setLoading } from "@/lib/features/auth/authSlice"
 
 const StoreLayout = ({ children }) => {
-
-
-    const [isSeller, setIsSeller] = useState(false)
-    const [loading, setLoading] = useState(true)
+    const router = useRouter()
+    const dispatch = useAppDispatch()
+    const { user, isAuthenticated, isLoading } = useAppSelector(state => state?.auth || { user: null, isAuthenticated: false, isLoading: true })
+    const [isAuthorized, setIsAuthorized] = useState(false)
     const [storeInfo, setStoreInfo] = useState(null)
 
-    const fetchIsSeller = async () => {
-        setIsSeller(true)
-        setStoreInfo(dummyStoreData)
-        setLoading(false)
+    useEffect(() => {
+        const checkAuth = async () => {
+            console.log('[StoreLayout] checkAuth starting')
+            
+            // Check if user already in Redux
+            console.log('[StoreLayout] Redux user state:', { user, isAuthenticated, userRole: user?.role })
+            
+            if (user && (user.role === 'seller' || user.role === 'admin')) {
+                console.log('[StoreLayout] User already in Redux with valid role, authorizing')
+                setIsAuthorized(true)
+                dispatch(setLoading(false))
+                setStoreInfo({
+                    id: '1',
+                    name: 'K-Beauty Store',
+                    username: 'kbeauty-store',
+                    logo: null,
+                })
+                return
+            }
+
+            // Try to verify token via API (cookie is sent automatically)
+            console.log('[StoreLayout] Calling /api/auth/verify')
+            try {
+                const response = await fetch('/api/auth/verify', {
+                    credentials: 'include'
+                })
+                const data = await response.json()
+                console.log('[StoreLayout] Verify response:', { success: data.success, user: data.user })
+                
+                if (data.success && data.user) {
+                    console.log('[StoreLayout] Setting user in Redux, role:', data.user.role)
+                    dispatch(setUser(data.user))
+                    if (data.user.role === 'seller' || data.user.role === 'admin') {
+                        console.log('[StoreLayout] Authorizing seller/admin')
+                        setIsAuthorized(true)
+                        dispatch(setLoading(false))
+                        setStoreInfo({
+                            id: '1',
+                            name: 'K-Beauty Store',
+                            username: 'kbeauty-store',
+                            logo: null,
+                        })
+                    } else {
+                        console.log('[StoreLayout] User not seller/admin, setting loading false')
+                        dispatch(setLoading(false))
+                    }
+                } else {
+                    console.log('[StoreLayout] Verify failed, setting loading false')
+                    dispatch(setLoading(false))
+                }
+            } catch (error) {
+                console.error('[StoreLayout] Auth check failed:', error)
+                dispatch(setLoading(false))
+            }
+        }
+
+        checkAuth()
+    }, [dispatch, user])
+
+    // Redirect to login if not authenticated
+    useEffect(() => {
+        if (!isLoading && !isAuthenticated) {
+            router.push('/login?redirect=/store')
+        }
+    }, [isLoading, isAuthenticated, router])
+
+    if (isLoading) {
+        return <Loading />
     }
 
-    useEffect(() => {
-        fetchIsSeller()
-    }, [])
+    if (!isAuthenticated) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center text-center px-6">
+                <h1 className="text-2xl sm:text-4xl font-semibold text-slate-400">Please sign in to continue</h1>
+                <Link href="/login?redirect=/store" className="bg-slate-700 text-white flex items-center gap-2 mt-8 p-2 px-6 max-sm:text-sm rounded-full">
+                    Go to Login <ArrowRightIcon size={18} />
+                </Link>
+            </div>
+        )
+    }
 
-    return loading ? (
-        <Loading />
-    ) : isSeller ? (
-        <div className="flex flex-col h-screen">
+    if (!isAuthorized) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center text-center px-6">
+                <h1 className="text-2xl sm:text-4xl font-semibold text-slate-400">You are not authorized to access this page</h1>
+                <p className="text-slate-500 mt-4">This area is restricted to sellers only.</p>
+                <Link href="/" className="bg-slate-700 text-white flex items-center gap-2 mt-8 p-2 px-6 max-sm:text-sm rounded-full">
+                    Go to home <ArrowRightIcon size={18} />
+                </Link>
+            </div>
+        )
+    }
+
+    return (
+        <div className="flex flex-col h-screen bg-gradient-to-br from-pink-50 to-rose-50">
             <SellerNavbar />
-            <div className="flex flex-1 items-start h-full overflow-y-scroll no-scrollbar">
+            <div className="flex flex-1 relative">
                 <SellerSidebar storeInfo={storeInfo} />
                 <div className="flex-1 h-full p-5 lg:pl-12 lg:pt-12 overflow-y-scroll">
                     {children}
                 </div>
             </div>
-        </div>
-    ) : (
-        <div className="min-h-screen flex flex-col items-center justify-center text-center px-6">
-            <h1 className="text-2xl sm:text-4xl font-semibold text-slate-400">You are not authorized to access this page</h1>
-            <Link href="/" className="bg-slate-700 text-white flex items-center gap-2 mt-8 p-2 px-6 max-sm:text-sm rounded-full">
-                Go to home <ArrowRightIcon size={18} />
-            </Link>
         </div>
     )
 }

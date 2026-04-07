@@ -4,9 +4,7 @@ generator client {
 }
 
 datasource db {
-    provider  = "postgresql"
-    url       = env("DATABASE_URL")
-    directUrl = env("DIRECT_URL")
+    provider = "postgresql"
 }
 
 // Required for creating a User: id, name, email, image, cart (optional JSON string)
@@ -34,14 +32,26 @@ model Product {
     images      String[]
     category    String
     inStock     Boolean  @default(true)
-    storeId     String
+    storeId     String?
     createdAt   DateTime @default(now())
     updatedAt   DateTime @updatedAt
 
+    // Korean beauty product fields
+    brand         String?
+    size          String?
+    formula       String?
+    howToUse      String?
+    keyBenefits   String[]
+    keyIngredients String[]
+    skinTypes     String?
+    skinConcerns  String?
+    texture       String?
+
     // Relations
-    store      Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
-    orderItems OrderItem[]
-    rating     Rating[]
+    store       Store?         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+    orderItems  OrderItem[]
+    rating      Rating[]
+    StoreProduct StoreProduct[]
 }
 
 enum OrderStatus {
@@ -157,7 +167,59 @@ model Store {
     createdAt   DateTime @default(now())
     updatedAt   DateTime @updatedAt
 
-    Product Product[]
-    Order   Order[]
-    user    User      @relation(fields: [userId], references: [id])
+    Product       Product[]
+    Order         Order[]
+    user          User      @relation(fields: [userId], references: [id])
+    StoreProduct  StoreProduct[]
+}
+
+// Junction table for admin products distributed to stores
+model StoreProduct {
+    id        String   @id @default(cuid())
+    productId String
+    storeId   String
+    price     Float
+    inStock   Boolean  @default(true)
+    status    String   @default("active")
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+    store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+    @@unique([productId, storeId])
+}
+
+enum UserAction {
+    LOGIN
+    LOGOUT
+    PASSWORD_CHANGE
+    ORDER_PLACED
+    ORDER_CANCELLED
+    PROFILE_UPDATE
+    ADDRESS_ADDED
+    ADDRESS_UPDATED
+    ADDRESS_DELETED
+    STORE_CREATED
+    STORE_UPDATED
+    PRODUCT_ADDED
+    PRODUCT_UPDATED
+}
+
+model UserActionLog {
+    id        String   @id @default(cuid())
+    userId    String
+    userName  String
+    userEmail String
+    action    UserAction
+    entityType String?  // e.g., 'order', 'address', 'store', 'profile'
+    entityId  String?  // ID of the affected entity
+    details   Json?    // Additional action metadata
+    ipAddress String?
+    userAgent String?
+    createdAt DateTime @default(now())
+
+    @@index([userId, createdAt])
+    @@index([action, createdAt])
+    @@index([createdAt])
 }
