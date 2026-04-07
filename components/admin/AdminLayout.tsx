@@ -21,19 +21,17 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     const [isAuthorized, setIsAuthorized] = useState(false)
 
     useEffect(() => {
-        console.log('[AdminLayout] Checking auth state')
+        console.log('[AdminLayout] Demo mode - checking Redux state')
         
-        // Trust middleware - if user is in Redux, they're already authenticated
+        // In demo mode, trust middleware and skip API calls
         if (user && user.role === 'admin') {
-            console.log('[AdminLayout] Admin user authorized')
+            console.log('[AdminLayout] Admin user in Redux - authorized')
             setIsAuthorized(true)
             dispatch(setLoading(false))
-            return
+        } else {
+            console.log('[AdminLayout] No admin user in Redux - redirecting')
+            dispatch(setLoading(false))
         }
-
-        // If no user in Redux, redirect to login
-        console.log('[AdminLayout] No user in Redux, redirecting')
-        dispatch(setLoading(false))
     }, [dispatch, user])
 
     useEffect(() => {

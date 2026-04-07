@@ -17,62 +17,23 @@ const StoreLayout = ({ children }) => {
     const [storeInfo, setStoreInfo] = useState(null)
 
     useEffect(() => {
-        const checkAuth = async () => {
-            console.log('[StoreLayout] checkAuth starting')
-            
-            // Check if user already in Redux
-            console.log('[StoreLayout] Redux user state:', { user, isAuthenticated, userRole: user?.role })
-            
-            if (user && (user.role === 'seller' || user.role === 'admin')) {
-                console.log('[StoreLayout] User already in Redux with valid role, authorizing')
-                setIsAuthorized(true)
-                dispatch(setLoading(false))
-                setStoreInfo({
-                    id: '1',
-                    name: 'K-Beauty Store',
-                    username: 'kbeauty-store',
-                    logo: null,
-                })
-                return
-            }
-
-            // Try to verify token via API (cookie is sent automatically)
-            console.log('[StoreLayout] Calling /api/auth/verify')
-            try {
-                const response = await fetch('/api/auth/verify', {
-                    credentials: 'include'
-                })
-                const data = await response.json()
-                console.log('[StoreLayout] Verify response:', { success: data.success, user: data.user })
-                
-                if (data.success && data.user) {
-                    console.log('[StoreLayout] Setting user in Redux, role:', data.user.role)
-                    dispatch(setUser(data.user))
-                    if (data.user.role === 'seller' || data.user.role === 'admin') {
-                        console.log('[StoreLayout] Authorizing seller/admin')
-                        setIsAuthorized(true)
-                        dispatch(setLoading(false))
-                        setStoreInfo({
-                            id: '1',
-                            name: 'K-Beauty Store',
-                            username: 'kbeauty-store',
-                            logo: null,
-                        })
-                    } else {
-                        console.log('[StoreLayout] User not seller/admin, setting loading false')
-                        dispatch(setLoading(false))
-                    }
-                } else {
-                    console.log('[StoreLayout] Verify failed, setting loading false')
-                    dispatch(setLoading(false))
-                }
-            } catch (error) {
-                console.error('[StoreLayout] Auth check failed:', error)
-                dispatch(setLoading(false))
-            }
+        console.log('[StoreLayout] Demo mode - checking Redux state')
+        
+        // In demo mode, trust middleware and skip API calls
+        if (user && (user.role === 'seller' || user.role === 'admin')) {
+            console.log('[StoreLayout] User in Redux - authorized')
+            setIsAuthorized(true)
+            dispatch(setLoading(false))
+            setStoreInfo({
+                id: '1',
+                name: 'K-Beauty Store',
+                username: 'kbeauty-store',
+                logo: null,
+            })
+        } else {
+            console.log('[StoreLayout] No user in Redux - redirecting')
+            dispatch(setLoading(false))
         }
-
-        checkAuth()
     }, [dispatch, user])
 
     // Redirect to login if not authenticated
