@@ -2,9 +2,11 @@ import { PrismaClient } from '@prisma/client'
 
 // Check if we should use mock client
 const shouldUseMock = process.env.NODE_ENV === 'development' || 
+                     process.env.NODE_ENV === undefined || // Build time
                      !process.env.DATABASE_URL || 
                      process.env.DATABASE_URL.includes('localhost') ||
-                     process.env.DATABASE_URL.includes('korea-cosmetics')
+                     process.env.DATABASE_URL.includes('korea-cosmetics') ||
+                     process.env.DATABASE_URL?.includes('postgresql://user:password') // Default placeholder
 
 // Mock Prisma client for development
 class MockPrismaClient {

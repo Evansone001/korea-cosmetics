@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -8,11 +8,34 @@ import { setUser } from '@/lib/features/auth/authSlice'
 import { assets } from '@/assets/assets'
 import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react'
 
-export default function Login() {
-    const router = useRouter()
+function LoginContentWithSearchParams() {
     const searchParams = useSearchParams()
-    const dispatch = useAppDispatch()
     const redirect = searchParams.get('redirect') || '/'
+    const router = useRouter()
+    const dispatch = useAppDispatch()
+    
+    return (
+        <LoginContent 
+            router={router} 
+            dispatch={dispatch} 
+            redirect={redirect} 
+        />
+    )
+}
+
+export default function Login() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <LoginContentWithSearchParams />
+        </Suspense>
+    )
+}
+
+function LoginContent({ router, dispatch, redirect }: { 
+    router: any, 
+    dispatch: any, 
+    redirect: string 
+}) {
 
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')

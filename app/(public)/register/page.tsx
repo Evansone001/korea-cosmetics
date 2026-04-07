@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -8,7 +8,7 @@ import { setUser } from '@/lib/features/auth/authSlice'
 import { assets } from '@/assets/assets'
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, CheckCircle } from 'lucide-react'
 
-export default function Register() {
+function RegisterContent() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const dispatch = useAppDispatch()
@@ -316,5 +316,13 @@ export default function Register() {
                 </div>
             </div>
         </div>
+    )
+}
+
+export default function Register() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <RegisterContent />
+        </Suspense>
     )
 }
