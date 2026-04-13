@@ -21,7 +21,7 @@ interface UseSocialAuthReturn {
 export const useSocialAuth = (): UseSocialAuthReturn => {
   const router = useRouter()
   const dispatch = useAppDispatch()
-  const { isSocialAuthLoading, socialAuthError } = useAppSelector((state) => state.auth)
+  const { isSocialAuthLoading, socialAuthError } = useAppSelector((state) => state?.auth || { isSocialAuthLoading: false, socialAuthError: null })
 
   const initiateAuth = useCallback((provider: 'google' | 'github') => {
     try {
