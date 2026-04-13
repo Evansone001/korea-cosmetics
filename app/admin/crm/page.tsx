@@ -148,7 +148,7 @@ export default function CRMIntegrationPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">CRM Integration</h1>
-          <p className="text-slate-500 mt-1">Connect KoreaBeauty Hub with your custom CRM system</p>
+          <p className="text-slate-500 mt-1">Connect KoreaCosmetics' Hub with your custom CRM system</p>
         </div>
         <div className="flex items-center gap-2">
           {config?.configured && (
@@ -212,7 +212,7 @@ export default function CRMIntegrationPage() {
               type="url"
               value={webhookUrl}
               onChange={(e) => setWebhookUrl(e.target.value)}
-              placeholder="https://your-crm.com/api/webhooks/koreabeauty"
+              placeholder="https://your-crm.com/api/webhooks/KoreaCosmetics'"
               className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
             />
           </div>

@@ -2,7 +2,7 @@
 import type { StaticImageData } from 'next/image'
 
 export interface User {
-  id: string;
+  id: string; 
   name: string;
   email: string;
   image?: string | StaticImageData;
@@ -13,8 +13,8 @@ export interface Store {
   id: string;
   userId: string;
   name: string;
-  description: string;
-  username: string;
+  username?: string;
+  description: string; 
   address: string;
   status: "pending" | "approved" | "rejected";
   isActive: boolean;
@@ -159,9 +159,17 @@ export interface AuthState {
     name: string;
     role: 'customer' | 'seller' | 'admin';
     image?: string;
+    email_verified: boolean;
+    auth_provider: 'email' | 'google' | 'github' | null;
+    last_login_method: 'email' | 'google' | 'github';
+    phone?: string;
+    first_name?: string;
+    last_name?: string;
   } | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isSocialAuthLoading: boolean;
+  socialAuthError: string | null;
 }
 
 export interface RootState {
@@ -188,6 +196,7 @@ export interface AdminLayoutProps {
 
 export interface StoreLayoutProps {
   children: React.ReactNode;
+  
 }
 
 // Utility Types

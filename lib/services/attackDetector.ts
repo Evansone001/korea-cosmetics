@@ -467,8 +467,7 @@ export class AttackDetector {
       // Check if origin/referer is missing or different
       const allowedOrigins = [
         'http://localhost:3000',
-        'https://koreabeautyhub.co.ke',
-        'https://www.koreabeautyhub.co.ke'
+        'https://koreacosmetics.top',
       ]
       
       if (origin && !allowedOrigins.some(allowed => origin.includes(allowed))) {

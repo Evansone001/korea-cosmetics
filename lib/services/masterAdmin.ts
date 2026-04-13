@@ -1,4 +1,4 @@
-// Master Admin Service for KoreaBeauty Hub Control Center
+// Master Admin Service for KoreaCosmetics' Hub Control Center
 import { 
     StorePerformance, 
     PlatformMetrics, 
@@ -257,22 +257,84 @@ const mockAuditLogs: any[] = [
 export const masterAdminService = {
     // Get all store performance data
     async getAllStorePerformance(): Promise<StorePerformance[]> {
-        // In production, this would be an API call
-        // return fetch('/api/admin/stores/performance').then(res => res.json())
-        
-        // Mock implementation
-        await new Promise(resolve => setTimeout(resolve, 500)) // Simulate API delay
-        return mockStores
+        try {
+            const response = await fetch('/api/admin/stores/performance', {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            
+            if (!response.ok) {
+                console.error('Store performance response:', response.status, response.statusText)
+                throw new Error(`Failed to fetch store performance data: ${response.status}`)
+            }
+            
+            const data = await response.json()
+            
+            // Transform backend store data to match frontend interface
+            const stores: StorePerformance[] = data.stores.map((store: any) => ({
+                id: store.id,
+                name: store.name,
+                owner: store.user_id || 'Unknown',
+                status: store.status === 'active' ? 'active' : store.status === 'suspended' ? 'suspended' : 'pending',
+                location: `${store.city || ''}, ${store.country || ''}`,
+                metrics: {
+                    revenue: 0, // Will be calculated from orders
+                    orders: 0, // Will be calculated from orders
+                    customers: 0, // Will be calculated from users
+                    products: 0, // Will be calculated from products
+                    conversionRate: 0,
+                    avgOrderValue: 0,
+                    rating: 0,
+                    reviews: 0,
+                    revenueGrowth: 0,
+                    orderGrowth: 0,
+                    customerGrowth: 0
+                },
+                trends: {
+                    revenueChange: 0,
+                    ordersChange: 0,
+                    isPositive: true,
+                    revenueGrowth: 0,
+                    orderGrowth: 0,
+                    customerGrowth: 0
+                },
+                healthScore: 75,
+                lastActivity: store.updated_at || store.created_at,
+                createdAt: store.created_at
+            }))
+            
+            return stores
+        } catch (error) {
+            console.error('Failed to fetch store performance data:', error)
+            // Fallback to mock data if API fails
+            await new Promise(resolve => setTimeout(resolve, 500))
+            return mockStores
+        }
     },
 
     // Get platform-wide metrics
     async getPlatformMetrics(): Promise<PlatformMetrics> {
-        // In production, this would be an API call
-        // return fetch('/api/admin/platform/metrics').then(res => res.json())
-        
-        // Mock implementation
-        await new Promise(resolve => setTimeout(resolve, 300))
-        return mockPlatformMetrics
+        try {
+            const response = await fetch('/api/admin/metrics/platform', {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            
+            if (!response.ok) {
+                console.error('Platform metrics response:', response.status, response.statusText)
+                throw new Error(`Failed to fetch platform metrics: ${response.status}`)
+            }
+            
+            const data = await response.json()
+            return data
+        } catch (error) {
+            console.error('Failed to fetch platform metrics:', error)
+            // Fallback to mock data if API fails
+            await new Promise(resolve => setTimeout(resolve, 300))
+            return mockPlatformMetrics
+        }
     },
 
     // Get store health scores

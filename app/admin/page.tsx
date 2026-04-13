@@ -26,7 +26,7 @@ import Link from 'next/link'
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
 
 export default function AdminDashboard() {
-    const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || 'KShs'
+    const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || 'KES'
     const [loading, setLoading] = useState(true)
     const [timeRange, setTimeRange] = useState('7d')
     
@@ -103,10 +103,10 @@ export default function AdminDashboard() {
             `Revenue increased by ${platformMetrics.platformGrowth}% compared to last period`,
             `${platformMetrics.activeStores} active stores on the platform`,
             `${platformMetrics.totalOrders} total orders processed`,
-            `Average store revenue: KShs ${platformMetrics.avgStoreRevenue.toLocaleString()}`
+            `Average store revenue: KES ${platformMetrics.avgStoreRevenue.toLocaleString()}`
         ] : [],
         insights: stores.length > 0 
-            ? `Top performing store ${stores[0]?.name} is leading with KShs ${stores[0]?.metrics.revenue.toLocaleString()} in revenue. Consider analyzing their strategies for platform-wide improvements.`
+            ? `Top performing store ${stores[0]?.name} is leading with KES ${stores[0]?.metrics.revenue.toLocaleString()} in revenue. Consider analyzing their strategies for platform-wide improvements.`
             : 'Loading platform insights...',
         alerts: alerts.length
     }
@@ -158,7 +158,7 @@ export default function AdminDashboard() {
                         </div>
                         <div>
                             <h2 className="text-lg font-bold">AI Weekly Summary</h2>
-                            <p className="text-white/80 text-sm">Powered by KoreaBeauty AI • Last updated: {new Date().toLocaleDateString()}</p>
+                            <p className="text-white/80 text-sm">Powered by KoreaCosmetics' AI • Last updated: {new Date().toLocaleDateString()}</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2 text-sm bg-white/20 px-3 py-1 rounded-full backdrop-blur-sm">
@@ -360,7 +360,7 @@ export default function AdminDashboard() {
                                     yAxisId="left"
                                     tick={{ fontSize: 12, fill: '#64748b' }}
                                     stroke="#cbd5e1"
-                                    tickFormatter={(value) => `KShs${(value/1000).toFixed(0)}k`}
+                                    tickFormatter={(value) => `KES ${(value/1000).toFixed(0)}k`}
                                 />
                                 <YAxis 
                                     yAxisId="right" 
@@ -371,7 +371,7 @@ export default function AdminDashboard() {
                                 <Tooltip 
                                     contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                     formatter={(value: number, name: string) => [
-                                        name === 'revenue' ? `KShs${value.toLocaleString()}` : `${value} orders`,
+                                        name === 'revenue' ? `KES ${value.toLocaleString()}` : `${value} orders`,
                                         name === 'revenue' ? 'Revenue' : 'Orders'
                                     ]}
                                     labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
@@ -496,7 +496,7 @@ export default function AdminDashboard() {
                                         </td>
                                         <td className="py-4">
                                             <div>
-                                                <p className="font-semibold text-slate-800">KShs {(store.metrics.revenue/1000).toFixed(0)}k</p>
+                                                <p className="font-semibold text-slate-800">KES {(store.metrics.revenue/1000).toFixed(0)}k</p>
                                                 <p className="text-xs text-slate-500">{store.metrics.orders} orders</p>
                                                 {store.trends.isPositive && (
                                                     <p className="text-xs text-green-600 flex items-center gap-1 mt-1">

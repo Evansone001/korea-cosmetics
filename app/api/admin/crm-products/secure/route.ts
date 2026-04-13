@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
       productsToSync = await crmProductSync.fetchProductsFromCRM();
     }
 
-    // Sync to KoreaBeauty Hub
+    // Sync to KoreaCosmetics' Hub
     const result = await crmProductSync.syncProducts(productsToSync);
 
     // Log the import

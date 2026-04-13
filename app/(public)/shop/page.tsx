@@ -1,9 +1,9 @@
 'use client'
-import { Suspense, useState, useMemo } from "react"
+import { Suspense, useState, useMemo, useEffect } from "react"
 import ProductCard from "@/components/ProductCard"
 import { MoveLeftIcon, SearchIcon, FilterIcon, Grid3X3Icon, LayoutGridIcon } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useAppSelector } from "@/lib/hooks"
+import { apiClient } from "@/lib/api-client"
 
 const categories = [
     { name: "All", icon: "✨", count: null },
@@ -17,54 +17,101 @@ function ShopContent() {
     const searchParams = useSearchParams()
     const search = searchParams.get('search')
     const router = useRouter()
-    
+
     const [selectedCategory, setSelectedCategory] = useState("All")
     const [sortBy, setSortBy] = useState("featured")
     const [viewMode, setViewMode] = useState<"grid" | "compact">("grid")
+    const [products, setProducts] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
 
-    const products = useAppSelector(state => state.product.list)
+    // Fetch products from backend
+    useEffect(() => {
+        const fetchProducts = async () => {
+            try {
+                setLoading(true)
+                setError(null)
 
-    const filteredProducts = useMemo(() => {
-        let result = search
-            ? products.filter(product =>
-                product.name.toLowerCase().includes(search.toLowerCase()) ||
-                product.category.toLowerCase().includes(search.toLowerCase()) ||
-                (product.brand && product.brand.toLowerCase().includes(search.toLowerCase()))
-              )
-            : [...products];
+                const params: any = {
+                    limit: 100
+                }
 
-        // Filter by category
-        if (selectedCategory !== "All") {
-            result = result.filter(product => 
-                product.category.toLowerCase() === selectedCategory.toLowerCase()
-            );
+                if (search) {
+                    params.search = search
+                }
+
+                if (selectedCategory !== "All") {
+                    params.category = selectedCategory
+                }
+
+                // Map sort values to API parameters
+                const sortMap: { [key: string]: string } = {
+                    'newest': 'created_at',
+                    'price-low': 'price',
+                    'price-high': 'price',
+                    'rating': 'rating'
+                }
+
+                if (sortBy !== 'featured' && sortMap[sortBy]) {
+                    params.sort_by = sortMap[sortBy]
+                    params.sort_order = sortBy === 'price-high' ? 'desc' : 'asc'
+                }
+
+                const response = await apiClient.getProducts(params)
+                const backendUrl = process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000';
+                console.log('Backend URL:', backendUrl);
+                const products = (response.products || []).map((product: any) => {
+                    const transformedImages = (product.images || []).map((img: string) => {
+                        if (img.startsWith('/uploads/')) {
+                            const fullUrl = `${backendUrl}${img}`;
+                            console.log('Transformed image:', img, '->', fullUrl);
+                            return fullUrl;
+                        }
+                        console.log('Image already full URL:', img);
+                        return img;
+                    });
+                    console.log('Product images:', product.name, transformedImages);
+                    return {
+                        ...product,
+                        images: transformedImages
+                    };
+                });
+                console.log('All products with transformed images:', products);
+                setProducts(products)
+            } catch (err) {
+                console.error('Failed to fetch products:', err)
+                setError('Failed to load products. Please try again.')
+            } finally {
+                setLoading(false)
+            }
         }
 
-        // Sort products
-        switch (sortBy) {
-            case "newest":
-                result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-                break;
-            case "price-low":
-                result.sort((a, b) => a.price - b.price);
-                break;
-            case "price-high":
-                result.sort((a, b) => b.price - a.price);
-                break;
-            case "rating":
-                result.sort((a, b) => b.rating.length - a.rating.length);
-                break;
-            default: // featured - keep original order
-                break;
-        }
+        fetchProducts()
+    }, [search, selectedCategory, sortBy])
 
-        return result;
-    }, [products, search, selectedCategory, sortBy])
-
-    const productCount = filteredProducts.length;
+    const productCount = products.length;
 
     return (
         <div className="min-h-screen bg-slate-50">
+            {/* Loading State */}
+            {loading && (
+                <div className="flex items-center justify-center py-20">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500"></div>
+                </div>
+            )}
+
+            {/* Error State */}
+            {error && (
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-600">
+                        {error}
+                    </div>
+                </div>
+            )}
+
+            {/* Content */}
+            {!loading && !error && (
+            <>
             {/* Header Banner */}
             <div className="bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100 border-b border-pink-100">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
@@ -74,14 +121,14 @@ function ShopContent() {
                                 {search ? 'Search Results' : 'All Products'}
                             </h1>
                             <p className="text-slate-500 text-sm sm:text-base">
-                                {search 
+                                {search
                                     ? `Found ${productCount} result${productCount !== 1 ? 's' : ''} for "${search}"`
                                     : `Discover premium Korean cosmetics - ${productCount} products available`
                                 }
                             </p>
                         </div>
                         {search && (
-                            <button 
+                            <button
                                 onClick={() => router.push('/shop')}
                                 className="flex items-center gap-2 bg-white hover:bg-pink-50 border border-pink-200 text-pink-600 px-4 py-2 rounded-lg transition-colors text-sm font-medium shadow-sm"
                             >
@@ -158,13 +205,13 @@ function ShopContent() {
 
             {/* Products Grid */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-16">
-                {filteredProducts.length > 0 ? (
+                {products.length > 0 ? (
                     <div className={`grid gap-6 ${
-                        viewMode === "grid" 
-                            ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" 
+                        viewMode === "grid"
+                            ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
                             : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
                     }`}>
-                        {filteredProducts.map((product) => (
+                        {products.map((product: any) => (
                             <ProductCard key={product.id} product={product} />
                         ))}
                     </div>
@@ -173,12 +220,12 @@ function ShopContent() {
                         <div className="text-6xl mb-4">🔍</div>
                         <h3 className="text-xl font-semibold text-slate-700 mb-2">No products found</h3>
                         <p className="text-slate-500 mb-6">
-                            {search 
+                            {search
                                 ? `We couldn't find any products matching "${search}"`
                                 : "No products available in this category"
                             }
                         </p>
-                        <button 
+                        <button
                             onClick={() => {
                                 setSelectedCategory("All");
                                 if (search) router.push('/shop');
@@ -190,6 +237,8 @@ function ShopContent() {
                     </div>
                 )}
             </div>
+            </>
+            )}
         </div>
     )
 }

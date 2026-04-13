@@ -1,570 +1,430 @@
-'use client';
+'use client'
 
-import { useState, useEffect } from 'react';
-import { 
-  Package, 
-  TrendingUp, 
-  AlertCircle,
-  DollarSign,
-  Plus,
-  Search,
-  Filter,
-  ShoppingBag,
-  Warehouse,
-  ArrowDownRight,
-  Building2,
-  Truck
-} from 'lucide-react';
-import Link from 'next/link';
-import toast from 'react-hot-toast';
+import { useState, useEffect } from 'react'
+import { Package, AlertTriangle, Search, RefreshCw, Edit2, Trash2, Store, DollarSign, Box, ExternalLink, Info, X } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
+import { apiClient } from '@/lib/api-client'
+import Link from 'next/link'
 
-import { LandingCostBreakdown } from '@/lib/services/wholesale';
-
-interface WarehouseInventory {
-  productId: string;
-  productName: string;
-  manufacturer: string;
-  category: string;
-  totalStock: number;
-  reservedStock: number;
-  availableStock: number;
-  unitCost: number;              // Product cost from manufacturer (Korea FOB)
-  landingCost: number;           // Total landed cost including shipping, duty, other
-  landingCostBreakdown: LandingCostBreakdown;
-  wholesalePrice: number;
-  retailPrice: number;
-  lowStockThreshold: number;
-  lastRestockedAt: string;
-  origin: string;
+interface WarehouseProduct {
+  id: string
+  name: string
+  description: string
+  category: string
+  brand?: string
+  customer_type: 'B2C' | 'B2B' | 'BOTH'
+  warehouse_stock: number
+  b2c_retail_price: number | null
+  b2b_wholesale_price: number | null
+  b2b_moq: number
+  status: string
+  sku?: string
 }
 
-export default function WarehouseInventoryPage() {
-  const [inventory, setInventory] = useState<WarehouseInventory[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [showRestockModal, setShowRestockModal] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<WarehouseInventory | null>(null);
-  const [restockQuantity, setRestockQuantity] = useState(0);
+export default function AdminWarehousePage() {
+  const { toast } = useToast()
+  const [products, setProducts] = useState<WarehouseProduct[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [customerTypeFilter, setCustomerTypeFilter] = useState<string>('ALL')
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<WarehouseProduct | null>(null)
+  const [formData, setFormData] = useState({name: '', description: '', category: '', brand: '', customer_type: 'BOTH' as 'B2C' | 'B2B' | 'BOTH', warehouse_stock: 0, b2c_retail_price: '', b2b_wholesale_price: '', b2b_moq: 1, sku: ''})
 
-  const categories = ['Skincare', 'Makeup', 'Haircare', 'Bodycare', 'Fragrance'];
-
-  useEffect(() => {
-    // Mock data - warehouse inventory from Korean suppliers with landing costs
-    setTimeout(() => {
-      setInventory([
-        {
-          productId: 'wp_1',
-          productName: 'COSRX Advanced Snail 92 Cream',
-          manufacturer: 'COSRX',
-          category: 'Skincare',
-          totalStock: 500,
-          reservedStock: 150,
-          availableStock: 350,
-          unitCost: 8.50,
-          landingCost: 12.60,
-          landingCostBreakdown: {
-            productCost: 8.50,
-            shippingCost: 1.00,
-            dutyCost: 2.85,
-            otherCost: 0.25
-          },
-          wholesalePrice: 15.50,
-          retailPrice: 28.00,
-          lowStockThreshold: 100,
-          lastRestockedAt: '2026-03-15T10:30:00Z',
-          origin: 'South Korea'
-        },
-        {
-          productId: 'wp_2',
-          productName: 'Innisfree Green Tea Seed Serum',
-          manufacturer: 'Innisfree',
-          category: 'Skincare',
-          totalStock: 300,
-          reservedStock: 80,
-          availableStock: 220,
-          unitCost: 10.50,
-          landingCost: 15.40,
-          landingCostBreakdown: {
-            productCost: 10.50,
-            shippingCost: 1.20,
-            dutyCost: 3.51,
-            otherCost: 0.19
-          },
-          wholesalePrice: 18.50,
-          retailPrice: 35.00,
-          lowStockThreshold: 60,
-          lastRestockedAt: '2026-03-10T14:20:00Z',
-          origin: 'South Korea'
-        },
-        {
-          productId: 'wp_3',
-          productName: 'Beauty of Joseon Glow Serum',
-          manufacturer: 'Beauty of Joseon',
-          category: 'Skincare',
-          totalStock: 800,
-          reservedStock: 200,
-          availableStock: 600,
-          unitCost: 6.50,
-          landingCost: 9.75,
-          landingCostBreakdown: {
-            productCost: 6.50,
-            shippingCost: 0.80,
-            dutyCost: 2.19,
-            otherCost: 0.26
-          },
-          wholesalePrice: 11.00,
-          retailPrice: 22.00,
-          lowStockThreshold: 150,
-          lastRestockedAt: '2026-03-20T09:15:00Z',
-          origin: 'South Korea'
-        },
-        {
-          productId: 'wp_4',
-          productName: 'LANEIGE Lip Sleeping Mask',
-          manufacturer: 'LANEIGE',
-          category: 'Skincare',
-          totalStock: 450,
-          reservedStock: 120,
-          availableStock: 330,
-          unitCost: 7.00,
-          landingCost: 10.50,
-          landingCostBreakdown: {
-            productCost: 7.00,
-            shippingCost: 0.90,
-            dutyCost: 2.37,
-            otherCost: 0.23
-          },
-          wholesalePrice: 12.50,
-          retailPrice: 24.00,
-          lowStockThreshold: 80,
-          lastRestockedAt: '2026-03-18T16:45:00Z',
-          origin: 'South Korea'
-        },
-        {
-          productId: 'wp_5',
-          productName: 'Etude House Drawing Eyebrow',
-          manufacturer: 'Etude House',
-          category: 'Makeup',
-          totalStock: 250,
-          reservedStock: 60,
-          availableStock: 190,
-          unitCost: 3.50,
-          landingCost: 5.25,
-          landingCostBreakdown: {
-            productCost: 3.50,
-            shippingCost: 0.50,
-            dutyCost: 1.20,
-            otherCost: 0.05
-          },
-          wholesalePrice: 6.50,
-          retailPrice: 12.00,
-          lowStockThreshold: 50,
-          lastRestockedAt: '2026-03-12T11:30:00Z',
-          origin: 'South Korea'
-        }
-      ]);
-      setLoading(false);
-    }, 1000);
-  }, []);
-
-  const getLowStockItems = () => {
-    return inventory.filter(item => item.availableStock <= item.lowStockThreshold);
-  };
-
-  const getInventoryStats = () => {
-    // Inventory value based on true landing cost (product + shipping + duty + other)
-    const totalValueAtCost = inventory.reduce((sum, item) => 
-      sum + (item.totalStock * item.landingCost), 0
-    );
-    // Potential revenue from B2B sales to stores
-    const totalWholesaleValue = inventory.reduce((sum, item) => 
-      sum + (item.availableStock * item.wholesalePrice), 0
-    );
-    // Potential revenue from retail sales
-    const totalRetailValue = inventory.reduce((sum, item) => 
-      sum + (item.availableStock * item.retailPrice), 0
-    );
-    const totalProducts = inventory.length;
-    const lowStockCount = getLowStockItems().length;
-
-    // True profit calculations using landing cost
-    const potentialB2BProfit = inventory.reduce((sum, item) => 
-      sum + (item.availableStock * (item.wholesalePrice - item.landingCost)), 0
-    );
-    const potentialRetailProfit = inventory.reduce((sum, item) => 
-      sum + (item.availableStock * (item.retailPrice - item.landingCost)), 0
-    );
-
-    return {
-      totalValueAtCost,
-      totalWholesaleValue,
-      totalRetailValue,
-      totalProducts,
-      lowStockCount,
-      potentialB2BProfit,
-      potentialRetailProfit
-    };
-  };
-
-  const handleRestock = () => {
-    if (!selectedProduct || restockQuantity <= 0) return;
-    
-    toast.success(`Order placed for ${restockQuantity} units of ${selectedProduct.productName} from Korea`);
-    setShowRestockModal(false);
-    setSelectedProduct(null);
-    setRestockQuantity(0);
-  };
-
-  const filteredInventory = inventory.filter(item => {
-    const matchesSearch = item.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         item.manufacturer.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = !selectedCategory || item.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
-
-  const stats = getInventoryStats();
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-2 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
-      </div>
-    );
+  const fetchProducts = async () => {
+    try {
+      setIsLoading(true)
+      const params: any = {}
+      if (customerTypeFilter !== 'ALL') params.customer_type = customerTypeFilter
+      const response = await apiClient.getWarehouseProducts(params)
+      setProducts(response.products || [])
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to fetch warehouse products", variant: "destructive" })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
+  useEffect(() => { fetchProducts() }, [customerTypeFilter])
+
+  const filteredProducts = products.filter(p => 
+    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.brand?.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  const handleUpdate = async () => {
+    if (!selectedProduct) return
+    try {
+      const data = {...formData, b2c_retail_price: formData.b2c_retail_price ? parseFloat(formData.b2c_retail_price) : null, b2b_wholesale_price: formData.b2b_wholesale_price ? parseFloat(formData.b2b_wholesale_price) : null}
+      await apiClient.updateWarehouseProduct(selectedProduct.id, data)
+      toast({ title: "Success", description: "Product updated" })
+      setIsEditDialogOpen(false)
+      fetchProducts()
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to update product", variant: "destructive" })
+    }
+  }
+
+  const handleDelete = async (product: WarehouseProduct) => {
+    if (!confirm('Are you sure you want to delete this product?')) return
+    try {
+      await apiClient.deleteWarehouseProduct(product.id)
+      toast({ title: "Success", description: "Product deleted" })
+      fetchProducts()
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to delete product", variant: "destructive" })
+    }
+  }
+
+  const openEdit = (product: WarehouseProduct) => {
+    setSelectedProduct(product)
+    setFormData({name: product.name, description: product.description, category: product.category, brand: product.brand || '', customer_type: product.customer_type, warehouse_stock: product.warehouse_stock, b2c_retail_price: product.b2c_retail_price?.toString() || '', b2b_wholesale_price: product.b2b_wholesale_price?.toString() || '', b2b_moq: product.b2b_moq, sku: product.sku || ''})
+    setIsEditDialogOpen(true)
+  }
+
+  const b2cProducts = products.filter(p => p.customer_type === 'B2C' || p.customer_type === 'BOTH')
+  const b2bProducts = products.filter(p => p.customer_type === 'B2B' || p.customer_type === 'BOTH')
+  const lowStock = products.filter(p => p.warehouse_stock < 50)
+
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Warehouse Inventory</h1>
-          <p className="text-slate-500 mt-1">
-            Manage Kenya warehouse stock from Korean suppliers
-          </p>
+          <h1 className="text-2xl font-bold text-slate-800">Warehouse Inventory</h1>
+          <p className="text-slate-500 mt-1">Manage stock levels and pricing for warehouse-enabled products</p>
         </div>
-        <button 
-          onClick={() => {
-            setSelectedProduct(null);
-            setShowRestockModal(true);
-          }}
-          className="flex items-center gap-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white px-4 py-2 rounded-xl hover:from-pink-600 hover:to-rose-600 transition-colors shadow-lg"
-        >
-          <Plus size={18} />
-          Import from Korea
-        </button>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" className="gap-2" onClick={fetchProducts}>
+            <RefreshCw className="w-4 h-4" /> Refresh
+          </Button>
+          <Link href="/admin/catalog">
+            <Button className="gap-2 bg-slate-900 hover:bg-slate-800">
+              <ExternalLink className="w-4 h-4" /> Manage Catalog
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      {/* Info Banner */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+        <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+        <div className="text-sm text-blue-800">
+          <p className="font-medium mb-1">Products are managed in the Catalog</p>
+          <p className="text-blue-600">Use the Catalog page to add new products and enable them for warehouse inventory. This page is for managing stock levels and pricing tiers.</p>
+        </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="bg-white rounded-xl border border-pink-100 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-rose-500 rounded-lg flex items-center justify-center">
-              <Package className="text-white" size={20} />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">{stats.totalProducts}</p>
-              <p className="text-sm text-slate-500">Products</p>
-            </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-slate-500">Total Products</span>
+            <Package className="w-4 h-4 text-blue-500" />
           </div>
+          <p className="text-xl font-bold text-slate-800">{products.length}</p>
         </div>
-
-        <div className="bg-white rounded-xl border border-pink-100 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg flex items-center justify-center">
-              <AlertCircle className="text-white" size={20} />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">{stats.lowStockCount}</p>
-              <p className="text-sm text-slate-500">Low Stock</p>
-            </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-slate-500">B2C Products</span>
+            <Store className="w-4 h-4 text-emerald-500" />
           </div>
+          <p className="text-xl font-bold text-slate-800">{b2cProducts.length}</p>
         </div>
-
-        <div className="bg-white rounded-xl border border-pink-100 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-              <Warehouse className="text-white" size={20} />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">${stats.totalValueAtCost.toFixed(0)}</p>
-              <p className="text-sm text-slate-500">Inventory at Cost</p>
-            </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-slate-500">B2B Products</span>
+            <DollarSign className="w-4 h-4 text-purple-500" />
           </div>
+          <p className="text-xl font-bold text-slate-800">{b2bProducts.length}</p>
         </div>
-
-        <div className="bg-white rounded-xl border border-pink-100 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg flex items-center justify-center">
-              <TrendingUp className="text-white" size={20} />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">${stats.potentialB2BProfit.toFixed(0)}</p>
-              <p className="text-sm text-slate-500">B2B Profit Potential</p>
-            </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-slate-500">Low Stock</span>
+            <AlertTriangle className="w-4 h-4 text-amber-500" />
           </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-pink-100 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
-              <DollarSign className="text-white" size={20} />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">${stats.potentialRetailProfit.toFixed(0)}</p>
-              <p className="text-sm text-slate-500">Retail Profit Potential</p>
-            </div>
-          </div>
+          <p className="text-xl font-bold text-slate-800">{lowStock.length}</p>
         </div>
       </div>
 
-      {/* Low Stock Alert */}
-      {stats.lowStockCount > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <div className="flex items-center gap-3">
-            <AlertCircle className="text-amber-600" size={20} />
-            <div className="flex-1">
-              <h3 className="font-medium text-amber-900">Low Stock Alert</h3>
-              <p className="text-sm text-amber-700">
-                {stats.lowStockCount} product{stats.lowStockCount > 1 ? 's are' : ' is'} running low. 
-                <button 
-                  onClick={() => setShowRestockModal(true)}
-                  className="underline font-medium ml-1 hover:text-amber-800"
-                >
-                  Restock from Korea now
-                </button>
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-pink-100 p-4">
-        <div className="flex flex-col sm:flex-row gap-4">
+      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+        <div className="flex flex-col lg:flex-row gap-4">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-pink-400" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <input
               type="text"
+              placeholder="Search products..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search warehouse inventory..."
-              className="w-full pl-10 pr-4 py-2.5 border border-pink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+              className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
             />
           </div>
           <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="border border-pink-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-500 bg-white"
+            value={customerTypeFilter}
+            onChange={(e) => setCustomerTypeFilter(e.target.value)}
+            className="px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
           >
-            <option value="">All Categories</option>
-            {categories.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
+            <option value="ALL">All Types</option>
+            <option value="B2C">B2C Only</option>
+            <option value="B2B">B2B Only</option>
+            <option value="BOTH">Both</option>
           </select>
         </div>
       </div>
 
-      {/* Inventory Table */}
-      <div className="bg-white rounded-xl border border-pink-100 overflow-hidden">
+      {/* Products Table */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gradient-to-r from-pink-50 to-rose-50 border-b border-pink-100">
+            <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-700">Product</th>
-                <th className="text-center px-4 py-3 text-sm font-medium text-slate-700">Stock</th>
-                <th className="text-right px-4 py-3 text-sm font-medium text-slate-700">Product Cost</th>
-                <th className="text-right px-4 py-3 text-sm font-medium text-slate-700">Landing Cost</th>
-                <th className="text-right px-4 py-3 text-sm font-medium text-slate-700">B2B Price</th>
-                <th className="text-right px-4 py-3 text-sm font-medium text-slate-700">Retail Price</th>
-                <th className="text-right px-4 py-3 text-sm font-medium text-slate-700">B2B Margin</th>
-                <th className="text-center px-4 py-3 text-sm font-medium text-slate-700">Actions</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-slate-700">Product</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-slate-700">Type</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-slate-700">Stock</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-slate-700">B2C Price</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-slate-700">B2B Price (MOQ)</th>
+                <th className="px-6 py-4 text-right text-sm font-medium text-slate-700">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-pink-100">
-              {filteredInventory.map((item) => {
-                const isLowStock = item.availableStock <= item.lowStockThreshold;
-                // B2B margin based on landing cost (true profit when selling to stores)
-                const b2bMargin = ((item.wholesalePrice - item.landingCost) / item.wholesalePrice * 100).toFixed(1);
-                const b2bProfitPerUnit = item.wholesalePrice - item.landingCost;
-
-                return (
-                  <tr key={item.productId} className="hover:bg-pink-50/30">
-                    <td className="px-4 py-4">
+            <tbody>
+              {isLoading ? (
+                <tr><td colSpan={6} className="text-center py-8 text-slate-500">Loading...</td></tr>
+              ) : filteredProducts.length === 0 ? (
+                <tr><td colSpan={6} className="text-center py-8 text-slate-500">No products found</td></tr>
+              ) : (
+                filteredProducts.map((product) => (
+                  <tr key={product.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50">
+                    <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-gradient-to-br from-pink-100 to-rose-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <Package className="text-pink-500" size={20} />
-                        </div>
-                        <div>
-                          <p className="font-medium text-slate-900">{item.productName}</p>
-                          <div className="flex items-center gap-2 text-sm">
-                            <span className="text-pink-600">{item.manufacturer}</span>
-                            <span className="text-slate-300">•</span>
-                            <span className="text-slate-500">{item.category}</span>
-                            <span className="text-slate-300">•</span>
-                            <span className="flex items-center gap-1 text-slate-500">
-                              <Building2 size={12} />
-                              {item.origin}
-                            </span>
+                        {(product as any).images && (product as any).images.length > 0 ? (
+                          <img
+                            src={(product as any).images[0].startsWith('http') ? (product as any).images[0] : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}${(product as any).images[0]}`}
+                            alt={product.name}
+                            className="w-10 h-10 rounded-lg object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/placeholder.png';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
+                            <Box className="w-5 h-5 text-slate-500" />
                           </div>
+                        )}
+                        <div>
+                          <p className="font-medium text-slate-800">{product.name}</p>
+                          <p className="text-xs text-slate-500">{product.brand} • {product.category}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-center">
-                      <div className="space-y-1">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          isLowStock 
-                            ? 'bg-amber-100 text-amber-700' 
-                            : 'bg-green-100 text-green-700'
-                        }`}>
-                          {item.availableStock} available
-                        </span>
-                        <p className="text-xs text-slate-400">
-                          {item.totalStock} total / {item.reservedStock} reserved
-                        </p>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${
+                        product.customer_type === 'B2C' ? 'bg-green-100 text-green-700 border-green-200' :
+                        product.customer_type === 'B2B' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                        'bg-slate-100 text-slate-700 border-slate-200'
+                      }`}>
+                        {product.customer_type}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-600">
+                      <span className={product.warehouse_stock < 50 ? 'text-red-600 font-medium' : ''}>
+                        {product.warehouse_stock}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-600">
+                      {product.b2c_retail_price ? `$${product.b2c_retail_price}` : '-'}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-600">
+                      {product.b2b_wholesale_price ? `$${product.b2b_wholesale_price} (MOQ: {product.b2b_moq})` : '-'}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(product)}>
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => handleDelete(product)}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
-                    </td>
-                    <td className="px-4 py-4 text-right text-slate-600">
-                      ${item.unitCost.toFixed(2)}
-                      <p className="text-xs text-slate-400">FOB Korea</p>
-                    </td>
-                    <td className="px-4 py-4 text-right">
-                      <span className="font-medium text-slate-900">${item.landingCost.toFixed(2)}</span>
-                      <p className="text-xs text-slate-400" title={`Shipping $${item.landingCostBreakdown.shippingCost} + Duty $${item.landingCostBreakdown.dutyCost} + Other $${item.landingCostBreakdown.otherCost}`}>
-                        +${(item.landingCost - item.unitCost).toFixed(2)} landed
-                      </p>
-                    </td>
-                    <td className="px-4 py-4 text-right">
-                      <span className="font-medium text-slate-900">${item.wholesalePrice.toFixed(2)}</span>
-                      <p className="text-xs text-green-600">+${b2bProfitPerUnit.toFixed(2)} profit</p>
-                    </td>
-                    <td className="px-4 py-4 text-right">
-                      <span className="font-medium text-slate-900">${item.retailPrice.toFixed(2)}</span>
-                    </td>
-                    <td className="px-4 py-4 text-right">
-                      <div className="space-y-1">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          parseFloat(b2bMargin) > 20 ? 'bg-green-100 text-green-700' : 
-                          parseFloat(b2bMargin) > 10 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                          {b2bMargin}%
-                        </span>
-                        <p className="text-xs text-slate-400">B2B margin</p>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <button
-                        onClick={() => {
-                          setSelectedProduct(item);
-                          setShowRestockModal(true);
-                        }}
-                        className="p-2 text-pink-600 hover:bg-pink-50 rounded-lg transition-colors"
-                        title="Restock from Korea"
-                      >
-                        <Truck size={18} />
-                      </button>
                     </td>
                   </tr>
-                );
-              })}
+                ))
+              )}
             </tbody>
           </table>
         </div>
-
-        {filteredInventory.length === 0 && (
-          <div className="p-12 text-center">
-            <Warehouse className="w-16 h-16 text-pink-200 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900 mb-2">No inventory yet</h3>
-            <p className="text-slate-500 mb-4">
-              Start importing products from your Korean suppliers
-            </p>
-            <button
-              onClick={() => setShowRestockModal(true)}
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white px-6 py-3 rounded-xl hover:from-pink-600 hover:to-rose-600 transition-colors shadow-lg"
-            >
-              <Truck size={18} />
-              Import from Korea
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* Restock Modal */}
-      {showRestockModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
-            <h3 className="text-xl font-bold text-slate-900 mb-2">
-              {selectedProduct ? `Restock ${selectedProduct.productName}` : 'Import from Korea'}
-            </h3>
-            <p className="text-slate-600 mb-6">
-              {selectedProduct 
-                ? `Order more stock from ${selectedProduct.manufacturer} in South Korea`
-                : 'Select a product to import from your Korean suppliers'
-              }
-            </p>
-            
-            {selectedProduct && (
-              <div className="space-y-4 mb-6">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Current Stock:</span>
-                  <span className="font-medium">{selectedProduct.totalStock} units</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Unit Cost:</span>
-                  <span className="font-medium">${selectedProduct.unitCost.toFixed(2)}</span>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Order Quantity
-                  </label>
-                  <input
-                    type="number"
-                    value={restockQuantity}
-                    onChange={(e) => setRestockQuantity(parseInt(e.target.value) || 0)}
-                    className="w-full px-4 py-2 border border-pink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
-                    placeholder="Enter quantity"
-                    min="1"
-                  />
-                </div>
-                {restockQuantity > 0 && (
-                  <div className="bg-pink-50 rounded-lg p-3 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Total Cost:</span>
-                      <span className="font-bold text-slate-900">
-                        ${(restockQuantity * selectedProduct.unitCost).toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between mt-1">
-                      <span className="text-slate-600">Est. Delivery:</span>
-                      <span className="text-slate-900">7-14 days from Korea</span>
-                    </div>
-                  </div>
-                )}
+      {/* Edit Dialog */}
+      {isEditDialogOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-900">Edit Warehouse Product</h2>
+                <button
+                  onClick={() => setIsEditDialogOpen(false)}
+                  className="p-2 hover:bg-slate-100 rounded-lg"
+                >
+                  <X size={20} />
+                </button>
               </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setShowRestockModal(false);
-                  setSelectedProduct(null);
-                  setRestockQuantity(0);
-                }}
-                className="flex-1 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleRestock}
-                disabled={!selectedProduct || restockQuantity <= 0}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-lg hover:from-pink-600 hover:to-rose-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {selectedProduct ? 'Place Order' : 'Select Product'}
-              </button>
             </div>
+
+            <form onSubmit={handleUpdate} className="p-6 grid sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Product Name *
+                </label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  required
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 h-24 resize-none"
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Category *
+                </label>
+                <input
+                  type="text"
+                  value={formData.category}
+                  onChange={(e) => setFormData({...formData, category: e.target.value})}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Brand *
+                </label>
+                <input
+                  type="text"
+                  value={formData.brand}
+                  onChange={(e) => setFormData({...formData, brand: e.target.value})}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Customer Type *
+                </label>
+                <Select value={formData.customer_type} onValueChange={(v: 'B2C' | 'B2B' | 'BOTH') => setFormData({...formData, customer_type: v})}>
+                  <SelectTrigger className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="B2C">B2C (Resellers)</SelectItem>
+                    <SelectItem value="B2B">B2B (Wholesalers)</SelectItem>
+                    <SelectItem value="BOTH">Both</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  SKU
+                </label>
+                <input
+                  type="text"
+                  value={formData.sku}
+                  onChange={(e) => setFormData({...formData, sku: e.target.value})}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  B2C Retail Price ($)
+                </label>
+                <input
+                  type="number"
+                  value={formData.b2c_retail_price}
+                  onChange={(e) => setFormData({...formData, b2c_retail_price: e.target.value})}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  step="0.01"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  B2B Wholesale Price ($)
+                </label>
+                <input
+                  type="number"
+                  value={formData.b2b_wholesale_price}
+                  onChange={(e) => setFormData({...formData, b2b_wholesale_price: e.target.value})}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  step="0.01"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  B2B MOQ
+                </label>
+                <input
+                  type="number"
+                  value={formData.b2b_moq}
+                  onChange={(e) => setFormData({...formData, b2b_moq: parseInt(e.target.value)})}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  min="1"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Warehouse Stock
+                </label>
+                <input
+                  type="number"
+                  value={formData.warehouse_stock}
+                  onChange={(e) => setFormData({...formData, warehouse_stock: parseInt(e.target.value)})}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  min="0"
+                />
+              </div>
+
+              <div className="sm:col-span-2 flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsEditDialogOpen(false)}
+                  className="px-6 py-2 border-2 border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex items-center gap-2 px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium"
+                >
+                  Update Product
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
     </div>
-  );
+  )
 }

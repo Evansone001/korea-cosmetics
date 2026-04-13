@@ -49,7 +49,10 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
                             id: payload.sub,
                             email: payload.email,
                             name: payload.name,
-                            role: payload.role
+                            role: payload.role,
+                            email_verified: false,
+                            auth_provider: null,
+                            last_login_method: "email"
                         }))
                         setIsAuthorized(true)
                         dispatch(setLoading(false))

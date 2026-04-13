@@ -1,26 +1,37 @@
 'use client'
-import { useState } from 'react'
-import { Search, Filter, CheckCircle, XCircle, Clock, Store, X, Eye, MapPin, Mail, Phone, Calendar, User, MessageSquare, Bell, Send, Edit2, Trash2, Ban, Unlock, MoreHorizontal, Download, ChevronDown, Plus, AlertTriangle } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Search, Filter, CheckCircle, XCircle, Store, X, Eye, MapPin, Mail, Phone, Calendar, User, MessageSquare, Bell, Send, Edit2, Trash2, Ban, Unlock, MoreHorizontal, Download, ChevronDown, Plus, AlertTriangle } from 'lucide-react'
+import { apiClient } from '@/lib/api-client'
+import toast from 'react-hot-toast'
 
 interface StoreRequest {
+    postal_code: any
     id: string
     name: string
     username: string
     email: string
     description: string
     address: string
+    address_line1: string
+    address_line2?: string
+    city: string
+    state: string
+    country: string
     contact: string
-    status: 'pending' | 'approved' | 'rejected'
+    business_type: string
     type: 'reseller' | 'wholesale'
-    submittedAt: string
-    updatedAt: string
-    isActive: boolean
-    isSuspended: boolean
-    suspendedAt?: string
-    suspendedReason?: string
-    adminComments: string
-    hasUnreadNotification: boolean
-    notifications: Notification[]
+    status: 'active' | 'inactive' | 'suspended'
+    is_active: boolean
+    created_at: string
+    updated_at: string
+    approved_at?: string
+    rejected_at?: string
+    suspended_at?: string
+    suspended_reason?: string
+    rejection_reason?: string
+    admin_comments?: string
+    has_unread_notification: boolean
+    notifications?: Notification[]
 }
 
 interface Notification {
@@ -33,7 +44,7 @@ interface Notification {
 
 export default function AdminStores() {
     const [searchQuery, setSearchQuery] = useState('')
-    const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'suspended'>('all')
+    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'suspended'>('all')
     const [typeFilter, setTypeFilter] = useState<'all' | 'reseller' | 'wholesale'>('all')
     const [dateFrom, setDateFrom] = useState('')
     const [dateTo, setDateTo] = useState('')
@@ -46,194 +57,114 @@ export default function AdminStores() {
     const [suspendReason, setSuspendReason] = useState('')
     const [storeToDelete, setStoreToDelete] = useState<StoreRequest | null>(null)
     const [storeToSuspend, setStoreToSuspend] = useState<StoreRequest | null>(null)
+    const [loading, setLoading] = useState(true)
 
-    // Sample store requests data
-    const [stores, setStores] = useState<StoreRequest[]>([
-        {
-            id: 'store_1',
-            name: 'K-Beauty Cosmetics',
-            username: 'kbeauty-cosmetics',
-            email: 'contact@kbeauty.com',
-            description: 'Premium Korean skincare and cosmetics retailer serving East Africa',
-            address: 'Nairobi, Kenya',
-            contact: '+254 712 345 678',
-            status: 'pending',
-            type: 'reseller',
-            submittedAt: '2026-01-15',
-            updatedAt: '2026-01-15',
-            isActive: true,
-            isSuspended: false,
-            adminComments: 'Please provide your business registration documents.',
-            hasUnreadNotification: true,
-            notifications: [
-                { id: 'notif_1', message: 'Your application is under review', type: 'status_change', createdAt: '2026-01-15', read: false }
-            ]
-        },
-        {
-            id: 'store_2',
-            name: 'Seoul Glow',
-            username: 'seoul-glow',
-            email: 'hello@seoulglow.co.ke',
-            description: 'Authentic K-beauty products direct from Seoul to Kenya',
-            address: 'Mombasa, Kenya',
-            contact: '+254 723 456 789',
-            status: 'approved',
-            type: 'reseller',
-            submittedAt: '2026-01-10',
-            updatedAt: '2026-01-10',
-            isActive: true,
-            isSuspended: false,
-            adminComments: 'Approved after verification. Welcome aboard!',
-            hasUnreadNotification: false,
-            notifications: []
-        },
-        {
-            id: 'store_3',
-            name: 'Glow Up Kenya',
-            username: 'glowup-ke',
-            email: 'info@glowup.co.ke',
-            description: 'Your destination for Korean beauty essentials',
-            address: 'Kisumu, Kenya',
-            contact: '+254 734 567 890',
-            status: 'rejected',
-            type: 'reseller',
-            submittedAt: '2026-01-08',
-            updatedAt: '2026-01-08',
-            isActive: false,
-            isSuspended: false,
-            adminComments: 'Rejected: Incomplete business information provided.',
-            hasUnreadNotification: false,
-            notifications: []
-        },
-        {
-            id: 'store_4',
-            name: 'Beauty Wholesale Kenya',
-            username: 'beauty-wholesale-ke',
-            email: 'orders@beautywholesale.co.ke',
-            description: 'Bulk Korean beauty products for retailers and distributors across East Africa',
-            address: 'Industrial Area, Nairobi, Kenya',
-            contact: '+254 745 678 901',
-            status: 'approved',
-            type: 'wholesale',
-            submittedAt: '2026-01-12',
-            updatedAt: '2026-01-12',
-            isActive: true,
-            isSuspended: true,
-            suspendedAt: '2026-01-20',
-            suspendedReason: 'Violation of terms - selling non-Korean products',
-            adminComments: '',
-            hasUnreadNotification: false,
-            notifications: []
-        },
-        {
-            id: 'store_5',
-            name: 'K-Beauty Distributors Ltd',
-            username: 'kbeauty-distributors',
-            email: 'info@kbeautydistributors.co.ke',
-            description: 'B2B wholesale supplier of premium Korean cosmetics and skincare products',
-            address: 'Mombasa Road, Nairobi, Kenya',
-            contact: '+254 756 789 012',
-            status: 'pending',
-            type: 'wholesale',
-            submittedAt: '2026-01-14',
-            updatedAt: '2026-01-14',
-            isActive: true,
-            isSuspended: false,
-            adminComments: 'Awaiting tax compliance certificate.',
-            hasUnreadNotification: true,
-            notifications: []
+    // Store data from API
+    const [stores, setStores] = useState<StoreRequest[]>([])
+
+    // Fetch stores from API
+    const fetchStores = async () => {
+        try {
+            setLoading(true)
+            const params: any = {}
+
+            if (statusFilter !== 'all') {
+                params.status = statusFilter
+            }
+            if (searchQuery) {
+                params.query = searchQuery
+            }
+
+            const response: any = await apiClient.getAllStoresAdmin(params)
+            // Map business_type to type for frontend compatibility
+            const storesWithType = (response.stores || []).map((store: any) => ({
+                ...store,
+                type: store.business_type === 'reseller' ? 'reseller' : 'wholesale'
+            }))
+            setStores(storesWithType)
+        } catch (error) {
+            console.error('Failed to fetch stores:', error)
+            toast.error('Failed to load stores')
+        } finally {
+            setLoading(false)
         }
-    ])
-
-    const handleApprove = (storeId: string) => {
-        setStores(prev => prev.map(store => 
-            store.id === storeId ? { ...store, status: 'approved' } : store
-        ))
     }
 
-    const handleReject = (storeId: string) => {
-        setStores(prev => prev.map(store => 
-            store.id === storeId ? { ...store, status: 'rejected' } : store
-        ))
-    }
+    useEffect(() => {
+        fetchStores()
+    }, [])
 
-    const handleUpdateComments = (storeId: string, comments: string) => {
-        setStores(prev => prev.map(store => 
-            store.id === storeId ? { ...store, adminComments: comments } : store
-        ))
-    }
+    useEffect(() => {
+        fetchStores()
+    }, [statusFilter, searchQuery])
 
-    const handleSendNotification = (storeId: string, message: string) => {
-        const newNotification: Notification = {
-            id: `notif_${Date.now()}`,
-            message,
-            type: 'comment',
-            createdAt: new Date().toISOString(),
-            read: false
+    const handleUpdateComments = async (storeId: string, comments: string) => {
+        try {
+            await apiClient.updateStore(storeId, { admin_comments: comments })
+            toast.success('Comments updated')
+            fetchStores()
+        } catch (error) {
+            toast.error('Failed to update comments')
         }
-        setStores(prev => prev.map(store => 
-            store.id === storeId 
-                ? { ...store, notifications: [...store.notifications, newNotification], hasUnreadNotification: true } 
-                : store
-        ))
     }
 
-    const markNotificationAsRead = (storeId: string) => {
-        setStores(prev => prev.map(store => 
-            store.id === storeId 
-                ? { ...store, hasUnreadNotification: false, notifications: store.notifications.map(n => ({ ...n, read: true })) } 
-                : store
-        ))
+    const handleSendNotification = async (storeId: string, message: string) => {
+        try {
+            await apiClient.sendStoreNotification(storeId, message, 'comment')
+            toast.success('Notification sent')
+            fetchStores()
+        } catch (error) {
+            toast.error('Failed to send notification')
+        }
     }
 
-    const handleEditStore = (storeId: string, updatedData: Partial<StoreRequest>) => {
-        setStores(prev => prev.map(store => 
-            store.id === storeId 
-                ? { ...store, ...updatedData, updatedAt: new Date().toISOString() } 
-                : store
-        ))
+    const markNotificationAsRead = async (storeId: string, notificationId: string) => {
+        try {
+            await apiClient.markNotificationAsRead(storeId, notificationId)
+            fetchStores()
+        } catch (error) {
+            console.error('Failed to mark notification as read')
+        }
     }
 
-    const handleDeleteStore = (storeId: string) => {
-        setStores(prev => prev.filter(store => store.id !== storeId))
-        setSelectedStores(prev => prev.filter(id => id !== storeId))
+    const handleDeleteStore = async (storeId: string) => {
+        try {
+            await apiClient.deleteStore(storeId)
+            toast.success('Store deleted successfully')
+            fetchStores()
+        } catch (error) {
+            toast.error('Failed to delete store')
+        }
     }
 
-    const handleSuspendStore = (storeId: string, reason: string) => {
-        setStores(prev => prev.map(store => 
-            store.id === storeId 
-                ? { 
-                    ...store, 
-                    isSuspended: true, 
-                    suspendedAt: new Date().toISOString(),
-                    suspendedReason: reason,
-                    updatedAt: new Date().toISOString()
-                  } 
-                : store
-        ))
+    const handleSuspendStore = async (storeId: string, reason: string) => {
+        try {
+            await apiClient.suspendStore(storeId, reason)
+            toast.success('Store suspended successfully')
+            fetchStores()
+        } catch (error) {
+            toast.error('Failed to suspend store')
+        }
     }
 
-    const handleReactivateStore = (storeId: string) => {
-        setStores(prev => prev.map(store => 
-            store.id === storeId 
-                ? { 
-                    ...store, 
-                    isSuspended: false, 
-                    suspendedAt: undefined,
-                    suspendedReason: undefined,
-                    updatedAt: new Date().toISOString()
-                  } 
-                : store
-        ))
+    const handleReactivateStore = async (storeId: string) => {
+        try {
+            await apiClient.reactivateStore(storeId)
+            toast.success('Store reactivated successfully')
+            fetchStores()
+        } catch (error) {
+            toast.error('Failed to reactivate store')
+        }
     }
 
-    const handleBulkApprove = () => {
-        setStores(prev => prev.map(store => 
-            selectedStores.includes(store.id) && store.status === 'pending'
-                ? { ...store, status: 'approved', updatedAt: new Date().toISOString() }
-                : store
-        ))
-        setSelectedStores([])
+    const handleEditStore = async (storeId: string, updatedData: any) => {
+        try {
+            await apiClient.updateStore(storeId, updatedData)
+            toast.success('Store updated successfully')
+            fetchStores()
+        } catch (error) {
+            toast.error('Failed to update store')
+        }
     }
 
     const handleBulkSuspend = () => {
@@ -262,20 +193,20 @@ export default function AdminStores() {
             ? stores.filter(s => selectedStores.includes(s.id))
             : filteredStores
 
-        const headers = ['ID', 'Name', 'Username', 'Email', 'Type', 'Status', 'Address', 'Contact', 'Submitted', 'Updated', 'Active', 'Suspended']
+        const headers = ['ID', 'Name', 'Username', 'Email', 'Type', 'Status', 'Address', 'Contact', 'Created', 'Updated', 'Active', 'Suspended']
         const rows = dataToExport.map(store => [
             store.id,
             store.name,
             store.username,
             store.email,
-            store.type,
+            store.business_type,
             store.status,
             store.address,
             store.contact,
-            store.submittedAt,
-            store.updatedAt,
-            store.isActive ? 'Yes' : 'No',
-            store.isSuspended ? 'Yes' : 'No'
+            store.created_at,
+            store.updated_at,
+            store.is_active ? 'Yes' : 'No',
+            store.suspended_at ? 'Yes' : 'No'
         ])
 
         const csvContent = [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n')
@@ -311,33 +242,35 @@ export default function AdminStores() {
                             store.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
                             store.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
                             store.address.toLowerCase().includes(searchQuery.toLowerCase())
-        const matchesStatus = statusFilter === 'all' || store.status === statusFilter || (statusFilter === 'suspended' && store.isSuspended)
+        const matchesStatus = statusFilter === 'all' || store.status === statusFilter || (statusFilter === 'suspended' && store.suspended_at)
         const matchesType = typeFilter === 'all' || store.type === typeFilter
-        const matchesDateFrom = !dateFrom || new Date(store.submittedAt) >= new Date(dateFrom)
-        const matchesDateTo = !dateTo || new Date(store.submittedAt) <= new Date(dateTo)
+        const matchesDateFrom = !dateFrom || new Date(store.created_at) >= new Date(dateFrom)
+        const matchesDateTo = !dateTo || new Date(store.created_at) <= new Date(dateTo)
         return matchesSearch && matchesStatus && matchesType && matchesDateFrom && matchesDateTo
     })
 
     const getStatusIcon = (status: StoreRequest['status']) => {
         switch (status) {
-            case 'approved':
+            case 'active':
                 return <CheckCircle className="w-5 h-5 text-green-600" />
-            case 'rejected':
+            case 'inactive':
                 return <XCircle className="w-5 h-5 text-red-600" />
-            case 'pending':
-                return <Clock className="w-5 h-5 text-yellow-600" />
+            case 'suspended':
+                return <Ban className="w-5 h-5 text-orange-600" />
+            default:
+                return <Store className="w-5 h-5 text-slate-600" />
         }
     }
 
     const getStatusColor = (status: StoreRequest['status'], isSuspended?: boolean) => {
         if (isSuspended) return 'bg-orange-100 text-orange-800'
         switch (status) {
-            case 'approved':
+            case 'active':
                 return 'bg-green-100 text-green-800'
-            case 'rejected':
+            case 'inactive':
                 return 'bg-red-100 text-red-800'
-            case 'pending':
-                return 'bg-yellow-100 text-yellow-800'
+            case 'suspended':
+                return 'bg-orange-100 text-orange-800'
         }
     }
 
@@ -372,7 +305,7 @@ export default function AdminStores() {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-3 gap-4 mb-6">
                 <div className="bg-white border border-slate-200 rounded-lg p-4">
                     <div className="flex items-center justify-between">
                         <div>
@@ -385,20 +318,9 @@ export default function AdminStores() {
                 <div className="bg-white border border-slate-200 rounded-lg p-4">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm text-slate-500">Pending</p>
-                            <p className="text-2xl font-bold text-yellow-600">
-                                {stores.filter(s => s.status === 'pending').length}
-                            </p>
-                        </div>
-                        <Clock className="w-8 h-8 text-yellow-500" />
-                    </div>
-                </div>
-                <div className="bg-white border border-slate-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-slate-500">Approved</p>
+                            <p className="text-sm text-slate-500">Active</p>
                             <p className="text-2xl font-bold text-green-600">
-                                {stores.filter(s => s.status === 'approved').length}
+                                {stores.filter(s => s.status === 'active').length}
                             </p>
                         </div>
                         <CheckCircle className="w-8 h-8 text-green-500" />
@@ -407,15 +329,23 @@ export default function AdminStores() {
                 <div className="bg-white border border-slate-200 rounded-lg p-4">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm text-slate-500">Rejected</p>
+                            <p className="text-sm text-slate-500">Inactive/Suspended</p>
                             <p className="text-2xl font-bold text-red-600">
-                                {stores.filter(s => s.status === 'rejected').length}
+                                {stores.filter(s => s.status === 'inactive' || s.status === 'suspended').length}
                             </p>
                         </div>
                         <XCircle className="w-8 h-8 text-red-500" />
                     </div>
                 </div>
             </div>
+
+            {/* Loading Indicator */}
+            {loading && (
+                <div className="flex items-center justify-center py-12">
+                    <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin"></div>
+                    <p className="ml-3 text-slate-600">Loading stores...</p>
+                </div>
+            )}
 
             {/* Filters */}
             <div className="bg-white border border-slate-200 rounded-lg p-4 mb-6">
@@ -444,12 +374,11 @@ export default function AdminStores() {
                         <select
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value as any)}
-                            className="px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                         >
                             <option value="all">All Status</option>
-                            <option value="pending">Pending</option>
-                            <option value="approved">Approved</option>
-                            <option value="rejected">Rejected</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
                             <option value="suspended">Suspended</option>
                         </select>
                         <input
@@ -484,39 +413,35 @@ export default function AdminStores() {
 
             {/* Bulk Actions Toolbar */}
             {selectedStores.length > 0 && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 flex items-center justify-between">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                         <span className="text-sm font-medium text-blue-800">
                             {selectedStores.length} store{selectedStores.length !== 1 ? 's' : ''} selected
                         </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={handleBulkApprove}
-                            className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1"
-                        >
-                            <CheckCircle className="w-4 h-4" />
-                            Approve
-                        </button>
+                    <div className="flex items-center gap-2 flex-wrap">
                         <button
                             onClick={handleBulkSuspend}
-                            className="px-3 py-1.5 bg-orange-600 text-white text-sm rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-1"
+                            className="px-2 sm:px-3 py-1.5 bg-orange-600 text-white text-xs sm:text-sm rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-1"
+                            title="Suspend selected"
                         >
-                            <Ban className="w-4 h-4" />
-                            Suspend
+                            <Ban className="w-3 h-3 sm:w-4 sm:h-4" />
+                            <span className="hidden sm:inline">Suspend</span>
                         </button>
                         <button
                             onClick={handleBulkDelete}
-                            className="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors flex items-center gap-1"
+                            className="px-2 sm:px-3 py-1.5 bg-red-600 text-white text-xs sm:text-sm rounded-lg hover:bg-red-700 transition-colors flex items-center gap-1"
+                            title="Delete selected"
                         >
-                            <Trash2 className="w-4 h-4" />
-                            Delete
+                            <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                            <span className="hidden sm:inline">Delete</span>
                         </button>
                         <button
                             onClick={() => setSelectedStores([])}
-                            className="px-3 py-1.5 text-slate-600 hover:bg-blue-100 rounded-lg text-sm transition-colors"
+                            className="px-2 sm:px-3 py-1.5 text-slate-600 hover:bg-blue-100 rounded-lg text-xs sm:text-sm transition-colors"
                         >
-                            Clear Selection
+                            <span className="hidden sm:inline">Clear</span>
+                            <span className="sm:hidden">&times;</span>
                         </button>
                     </div>
                 </div>
@@ -535,11 +460,11 @@ export default function AdminStores() {
 
             {/* Stores Table */}
             <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full">
+                <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+                    <table className="w-full min-w-[900px]">
                         <thead className="bg-slate-50 border-b border-slate-200">
                             <tr>
-                                <th className="px-4 py-3 text-left">
+                                <th className="px-3 sm:px-4 py-3 text-left w-10">
                                     <input
                                         type="checkbox"
                                         checked={selectedStores.length === filteredStores.length && filteredStores.length > 0}
@@ -547,19 +472,19 @@ export default function AdminStores() {
                                         className="rounded border-slate-300"
                                     />
                                 </th>
-                                <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">Store</th>
-                                <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">Type</th>
-                                <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">Contact</th>
-                                <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">Location</th>
-                                <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">Status</th>
-                                <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">Submitted</th>
-                                <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">Actions</th>
+                                <th className="px-4 sm:px-6 py-3 text-left text-sm font-medium text-slate-700 min-w-[200px]">Store</th>
+                                <th className="px-4 sm:px-6 py-3 text-left text-sm font-medium text-slate-700">Type</th>
+                                <th className="px-4 sm:px-6 py-3 text-left text-sm font-medium text-slate-700 min-w-[150px]">Contact</th>
+                                <th className="px-4 sm:px-6 py-3 text-left text-sm font-medium text-slate-700 min-w-[150px]">Location</th>
+                                <th className="px-4 sm:px-6 py-3 text-left text-sm font-medium text-slate-700">Status</th>
+                                <th className="px-4 sm:px-6 py-3 text-left text-sm font-medium text-slate-700 whitespace-nowrap">Submitted</th>
+                                <th className="px-4 sm:px-6 py-3 text-left text-sm font-medium text-slate-700 w-[100px]">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200">
                             {filteredStores.map((store) => (
                                 <tr key={store.id} className={`hover:bg-slate-50 ${selectedStores.includes(store.id) ? 'bg-blue-50' : ''}`}>
-                                    <td className="px-4 py-4">
+                                    <td className="px-3 sm:px-4 py-4">
                                         <input
                                             type="checkbox"
                                             checked={selectedStores.includes(store.id)}
@@ -567,12 +492,12 @@ export default function AdminStores() {
                                             className="rounded border-slate-300"
                                         />
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-4 sm:px-6 py-4">
                                         <div className="flex items-start gap-2">
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-2">
                                                     <p className="font-medium text-slate-800">{store.name}</p>
-                                                    {store.hasUnreadNotification && (
+                                                    {store.has_unread_notification && (
                                                         <span className="relative flex h-2 w-2">
                                                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                                                             <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
@@ -582,14 +507,14 @@ export default function AdminStores() {
                                                 <p className="text-sm text-slate-500">@{store.username}</p>
                                                 <p className="text-xs text-slate-400 mt-1 line-clamp-2">{store.description}</p>
                                             </div>
-                                            {store.hasUnreadNotification && (
+                                            {store.has_unread_notification && (
                                                 <Bell className="w-4 h-4 text-red-500 flex-shrink-0" />
                                             )}
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${getTypeColor(store.type)}`}>
-                                            {store.type === 'reseller' ? 'B2C' : 'B2B'}
+                                            {getTypeLabel(store.type)}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
@@ -597,16 +522,22 @@ export default function AdminStores() {
                                         <p className="text-sm text-slate-500">{store.contact}</p>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <p className="text-sm text-slate-600">{store.address}</p>
+                                        <p className="text-sm text-slate-600">{store.address_line1 || store.address}</p>
+                                        {store.city && (
+                                            <p className="text-xs text-slate-500">
+                                                {store.city}{store.state ? `, ${store.state}` : ''}{store.postal_code ? ` ${store.postal_code}` : ''}{store.country ? `, ${store.country}` : ''}
+                                            </p>
+                                        )}
                                     </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(store.status, store.isSuspended)}`}>
-                                            {store.isSuspended ? <Ban className="w-4 h-4" /> : getStatusIcon(store.status)}
-                                            {getStatusLabel(store.status, store.isSuspended)}
+                                    <td className="px-4 sm:px-6 py-4">
+                                        <span className={`inline-flex items-center gap-1 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium ${getStatusColor(store.status, !!store.suspended_at)}`}>
+                                            {store.suspended_at ? <Ban className="w-3 h-3 sm:w-4 sm:h-4" /> : getStatusIcon(store.status)}
+                                            <span className="hidden sm:inline">{getStatusLabel(store.status, !!store.suspended_at)}</span>
+                                            <span className="sm:hidden">{store.suspended_at ? 'Suspended' : store.status.slice(0, 3)}</span>
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4">
-                                        <p className="text-sm text-slate-600">{new Date(store.submittedAt).toLocaleDateString()}</p>
+                                    <td className="px-4 sm:px-6 py-4">
+                                        <p className="text-xs sm:text-sm text-slate-600 whitespace-nowrap">{new Date(store.created_at).toLocaleDateString()}</p>
                                     </td>
                                     <td className="px-6 py-4">
                                         <StoreActionsDropdown 
@@ -675,9 +606,9 @@ export default function AdminStores() {
                                 <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border ${getTypeColor(selectedStore.type)}`}>
                                     {getTypeLabel(selectedStore.type)}
                                 </span>
-                                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${getStatusColor(selectedStore.status, selectedStore.isSuspended)}`}>
-                                    {selectedStore.isSuspended ? <Ban className="w-4 h-4" /> : getStatusIcon(selectedStore.status)}
-                                    {getStatusLabel(selectedStore.status, selectedStore.isSuspended)}
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${getStatusColor(selectedStore.status, !!selectedStore.suspended_at)}`}>
+                                    {selectedStore.suspended_at ? <Ban className="w-4 h-4" /> : getStatusIcon(selectedStore.status)}
+                                    {getStatusLabel(selectedStore.status, !!selectedStore.suspended_at)}
                                 </span>
                             </div>
 
@@ -716,7 +647,7 @@ export default function AdminStores() {
                             {/* Submission Info */}
                             <div className="flex items-center gap-2 text-sm text-slate-500 bg-slate-50 rounded-xl p-4">
                                 <Calendar className="w-4 h-4" />
-                                <span>Submitted on {new Date(selectedStore.submittedAt).toLocaleDateString()}</span>
+                                <span>Submitted on {new Date(selectedStore.created_at).toLocaleDateString()}</span>
                             </div>
 
                             {/* Admin Comments - Editable */}
@@ -726,31 +657,6 @@ export default function AdminStores() {
                                 onSendNotification={(message) => handleSendNotification(selectedStore.id, message)}
                             />
 
-                            {/* Actions */}
-                            {selectedStore.status === 'pending' && (
-                                <div className="flex gap-3 pt-4 border-t border-slate-200">
-                                    <button
-                                        onClick={() => {
-                                            handleApprove(selectedStore.id)
-                                            setShowModal(false)
-                                        }}
-                                        className="flex-1 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-                                    >
-                                        <CheckCircle className="w-4 h-4" />
-                                        Approve Store
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            handleReject(selectedStore.id)
-                                            setShowModal(false)
-                                        }}
-                                        className="flex-1 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-                                    >
-                                        <XCircle className="w-4 h-4" />
-                                        Reject Store
-                                    </button>
-                                </div>
-                            )}
 
                             <button
                                 onClick={() => setShowModal(false)}
@@ -816,7 +722,7 @@ interface StoreCommentsSectionProps {
 }
 
 function StoreCommentsSection({ store, onUpdateComments, onSendNotification }: StoreCommentsSectionProps) {
-    const [comments, setComments] = useState(store.adminComments)
+    const [comments, setComments] = useState(store.admin_comments || '')
     const [message, setMessage] = useState('')
     const [showMessageInput, setShowMessageInput] = useState(false)
 
@@ -901,10 +807,10 @@ function StoreCommentsSection({ store, onUpdateComments, onSendNotification }: S
                 )}
 
                 {/* Show existing notifications */}
-                {store.notifications.length > 0 && (
+                {store.notifications && store.notifications.length > 0 && (
                     <div className="mt-3 space-y-2">
                         <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Sent Messages</p>
-                        {store.notifications.map((notif) => (
+                        {store.notifications?.map((notif) => (
                             <div key={notif.id} className="bg-white rounded-lg p-3 text-sm border border-green-200">
                                 <p className="text-slate-700">{notif.message}</p>
                                 <p className="text-xs text-slate-400 mt-1">
@@ -931,82 +837,100 @@ interface StoreActionsDropdownProps {
 
 function StoreActionsDropdown({ store, onView, onEdit, onDelete, onSuspend, onReactivate }: StoreActionsDropdownProps) {
     const [isOpen, setIsOpen] = useState(false)
+    const buttonRef = useRef<HTMLButtonElement>(null)
+    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 })
+
+    // Calculate dropdown position when opened
+    useEffect(() => {
+        if (isOpen && buttonRef.current) {
+            const rect = buttonRef.current.getBoundingClientRect()
+            setDropdownPosition({
+                top: rect.bottom + window.scrollY + 4,
+                right: window.innerWidth - rect.right
+            })
+        }
+    }, [isOpen])
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        if (!isOpen) return
+        const handleClick = (e: MouseEvent) => {
+            if (buttonRef.current && !buttonRef.current.contains(e.target as Node)) {
+                // Check if click is inside dropdown
+                const dropdown = document.getElementById(`store-dropdown-${store.id}`)
+                if (!dropdown || !dropdown.contains(e.target as Node)) {
+                    setIsOpen(false)
+                }
+            }
+        }
+        document.addEventListener('mousedown', handleClick)
+        return () => document.removeEventListener('mousedown', handleClick)
+    }, [isOpen, store.id])
 
     return (
-        <div className="relative">
+        <>
             <button
+                ref={buttonRef}
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-700 text-sm rounded hover:bg-slate-200 transition-colors"
+                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 bg-slate-100 text-slate-700 text-sm rounded hover:bg-slate-200 transition-colors min-w-[36px] sm:min-w-[auto]"
+                aria-label="Actions"
             >
                 <MoreHorizontal className="w-4 h-4" />
-                Actions
+                <span className="hidden sm:inline">Actions</span>
                 <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
             {isOpen && (
-                <>
-                    <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-                    <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-20 py-1">
+                <div 
+                    id={`store-dropdown-${store.id}`}
+                    style={{
+                        position: 'fixed',
+                        top: dropdownPosition.top,
+                        right: dropdownPosition.right,
+                    }}
+                    className="w-44 sm:w-48 bg-white border border-slate-200 rounded-lg shadow-xl z-[100] py-1"
+                >
+                    <button
+                        onClick={() => { onView(); setIsOpen(false) }}
+                        className="w-full px-3 sm:px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                    >
+                        <Eye className="w-4 h-4" />
+                        View Details
+                    </button>
+                    <button
+                        onClick={() => { onEdit(); setIsOpen(false) }}
+                        className="w-full px-3 sm:px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                    >
+                        <Edit2 className="w-4 h-4" />
+                        Edit Store
+                    </button>
+                    {store.suspended_at ? (
                         <button
-                            onClick={() => { onView(); setIsOpen(false) }}
-                            className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                            onClick={() => { onReactivate(); setIsOpen(false) }}
+                            className="w-full px-3 sm:px-4 py-2 text-left text-sm text-green-600 hover:bg-green-50 flex items-center gap-2"
                         >
-                            <Eye className="w-4 h-4" />
-                            View Details
+                            <Unlock className="w-4 h-4" />
+                            Reactivate
                         </button>
+                    ) : (
                         <button
-                            onClick={() => { onEdit(); setIsOpen(false) }}
-                            className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                            onClick={() => { onSuspend(); setIsOpen(false) }}
+                            className="w-full px-3 sm:px-4 py-2 text-left text-sm text-orange-600 hover:bg-orange-50 flex items-center gap-2"
                         >
-                            <Edit2 className="w-4 h-4" />
-                            Edit Store
+                            <Ban className="w-4 h-4" />
+                            Suspend
                         </button>
-                        {store.status === 'pending' && (
-                            <>
-                                <button
-                                    onClick={() => { store.status === 'pending' && onView(); setIsOpen(false) }}
-                                    className="w-full px-4 py-2 text-left text-sm text-green-600 hover:bg-green-50 flex items-center gap-2"
-                                >
-                                    <CheckCircle className="w-4 h-4" />
-                                    Approve
-                                </button>
-                                <button
-                                    onClick={() => { store.status === 'pending' && onView(); setIsOpen(false) }}
-                                    className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                                >
-                                    <XCircle className="w-4 h-4" />
-                                    Reject
-                                </button>
-                            </>
-                        )}
-                        {store.isSuspended ? (
-                            <button
-                                onClick={() => { onReactivate(); setIsOpen(false) }}
-                                className="w-full px-4 py-2 text-left text-sm text-green-600 hover:bg-green-50 flex items-center gap-2"
-                            >
-                                <Unlock className="w-4 h-4" />
-                                Reactivate
-                            </button>
-                        ) : (
-                            <button
-                                onClick={() => { onSuspend(); setIsOpen(false) }}
-                                className="w-full px-4 py-2 text-left text-sm text-orange-600 hover:bg-orange-50 flex items-center gap-2"
-                            >
-                                <Ban className="w-4 h-4" />
-                                Suspend
-                            </button>
-                        )}
-                        <div className="border-t border-slate-200 my-1" />
-                        <button
-                            onClick={() => { onDelete(); setIsOpen(false) }}
-                            className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                            Delete
-                        </button>
-                    </div>
-                </>
+                    )}
+                    <div className="border-t border-slate-200 my-1" />
+                    <button
+                        onClick={() => { onDelete(); setIsOpen(false) }}
+                        className="w-full px-3 sm:px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                        Delete
+                    </button>
+                </div>
             )}
-        </div>
+        </>
     )
 }
 
@@ -1024,6 +948,12 @@ function EditStoreModal({ store, onClose, onSave }: EditStoreModalProps) {
         email: store.email,
         description: store.description,
         address: store.address,
+        address_line1: store.address_line1 || '',
+        address_line2: store.address_line2 || '',
+        city: store.city || '',
+        state: store.state || '',
+        postal_code: store.postal_code || '',
+        country: store.country || '',
         contact: store.contact,
         type: store.type
     })
@@ -1080,13 +1010,62 @@ function EditStoreModal({ store, onClose, onSave }: EditStoreModalProps) {
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Address Line 1</label>
                         <input
                             type="text"
-                            value={formData.address}
-                            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                            value={formData.address_line1}
+                            onChange={(e) => setFormData({ ...formData, address_line1: e.target.value })}
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Address Line 2</label>
+                        <input
+                            type="text"
+                            value={formData.address_line2}
+                            onChange={(e) => setFormData({ ...formData, address_line2: e.target.value })}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">City</label>
+                            <input
+                                type="text"
+                                value={formData.city}
+                                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">State/Province</label>
+                            <input
+                                type="text"
+                                value={formData.state}
+                                onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Postal Code</label>
+                            <input
+                                type="text"
+                                value={formData.postal_code}
+                                onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Country</label>
+                            <input
+                                type="text"
+                                value={formData.country}
+                                onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>

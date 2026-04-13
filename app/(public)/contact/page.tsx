@@ -44,7 +44,7 @@ export default function Contact() {
         {
             icon: Mail,
             title: 'Email',
-            details: ['info@koreabeautyhub.com', 'wholesale@koreabeautyhub.com', 'support@koreabeautyhub.com'],
+            details: ['info@koreabeautyhub.com', 'wholesale@KoreaCosmeticsHub.com', 'support@KoreaCosmeticsHub.com'],
             color: 'text-pink-600'
         },
         {
@@ -70,7 +70,7 @@ export default function Contact() {
             country: 'Kenya',
             address: '123 Moi Avenue, Nairobi Central',
             phone: '+254 712 345 678',
-            email: 'nairobi@koreabeautyhub.com',
+            email: 'nairobi@KoreaCosmeticsHub.com',
             type: 'Head Office'
         },
         {
@@ -78,7 +78,7 @@ export default function Contact() {
             country: 'Kenya',
             address: '456 Digo Road, Mombasa Island',
             phone: '+254 723 456 789',
-            email: 'mombasa@koreabeautyhub.com',
+            email: 'mombasa@KoreaCosmeticsHub.com',
             type: 'Branch Office'
         },
         {
@@ -86,7 +86,7 @@ export default function Contact() {
             country: 'Uganda',
             address: '789 Kampala Road, Central Division',
             phone: '+256 712 345 678',
-            email: 'kampala@koreabeautyhub.com',
+            email: 'kampala@KoreaCosmeticsHub.com',
             type: 'Regional Office'
         },
         {
@@ -94,7 +94,7 @@ export default function Contact() {
             country: 'Tanzania',
             address: '321 Morogoro Road, City Centre',
             phone: '+255 712 345 678',
-            email: 'dar@koreabeautyhub.com',
+            email: 'dar@KoreaCosmeticsHub.com',
             type: 'Regional Office'
         }
     ]
@@ -104,7 +104,7 @@ export default function Contact() {
             <div className="max-w-7xl mx-auto py-8">
                 <PageTitle 
                     heading="Contact Us" 
-                    text="Get in touch with KoreaBeauty Hub for partnerships, inquiries, or support" 
+                    text="Get in touch with KoreaCosmetics' Hub for partnerships, inquiries, or support" 
                     linkText="Back to Home" 
                     path="/" 
                 />
@@ -313,8 +313,8 @@ export default function Contact() {
                             </div>
                             <h3 className="font-semibold text-slate-900 mb-2">Partnership Team</h3>
                             <p className="text-sm text-slate-600 mb-3">For B2B and manufacturer partnerships</p>
-                            <a href="mailto:partnerships@koreabeautyhub.com" className="text-pink-600 hover:text-pink-700 text-sm font-medium">
-                                partnerships@koreabeautyhub.com
+                            <a href="mailto:partnerships@KoreaCosmeticsHub.com" className="text-pink-600 hover:text-pink-700 text-sm font-medium">
+                                partnerships@KoreaCosmeticsHub.com
                             </a>
                         </div>
                         <div className="text-center">
@@ -323,8 +323,8 @@ export default function Contact() {
                             </div>
                             <h3 className="font-semibold text-slate-900 mb-2">Sales Team</h3>
                             <p className="text-sm text-slate-600 mb-3">For wholesale orders and pricing</p>
-                            <a href="mailto:sales@koreabeautyhub.com" className="text-pink-600 hover:text-pink-700 text-sm font-medium">
-                                sales@koreabeautyhub.com
+                            <a href="mailto:sales@KoreaCosmeticsHub.com" className="text-pink-600 hover:text-pink-700 text-sm font-medium">
+                                sales@KoreaCosmeticsHub.com
                             </a>
                         </div>
                         <div className="text-center">
@@ -333,8 +333,8 @@ export default function Contact() {
                             </div>
                             <h3 className="font-semibold text-slate-900 mb-2">International</h3>
                             <p className="text-sm text-slate-600 mb-3">For cross-border and global inquiries</p>
-                            <a href="mailto:international@koreabeautyhub.com" className="text-pink-600 hover:text-pink-700 text-sm font-medium">
-                                international@koreabeautyhub.com
+                            <a href="mailto:international@KoreaCosmeticsHub.com" className="text-pink-600 hover:text-pink-700 text-sm font-medium">
+                                international@KoreaCosmeticsHub.com
                             </a>
                         </div>
                     </div>

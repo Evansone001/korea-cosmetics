@@ -1,6 +1,8 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit'
 import type { CartState } from '@/types'
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000'
+
 const initialState: CartState = {
     total: 0,
     cartItems: {},
@@ -8,13 +10,40 @@ const initialState: CartState = {
     error: null,
 }
 
+// Helper function to get auth token from cookies/localStorage
+const getAuthToken = (): string | null => {
+    // Try to get token from cookies first
+    if (typeof document !== 'undefined') {
+        const cookies = document.cookie.split(';');
+        const authCookie = cookies.find(cookie => cookie.trim().startsWith('auth-token='));
+        if (authCookie) {
+            return authCookie.split('=')[1];
+        }
+    }
+    
+    // Fallback to localStorage
+    if (typeof localStorage !== 'undefined') {
+        return localStorage.getItem('auth-token');
+    }
+    
+    return null;
+}
+
 // Async thunk to fetch cart from server
 export const fetchCart = createAsyncThunk(
     'cart/fetchCart',
     async (_, { rejectWithValue }) => {
         try {
-            const response = await fetch('/api/cart', {
-                credentials: 'include',
+            const token = getAuthToken()
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            }
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`
+            }
+            
+            const response = await fetch(`${API_BASE_URL}/api/cart`, {
+                headers,
             })
             const data = await response.json()
             
@@ -43,17 +72,24 @@ export const syncCart = createAsyncThunk(
     'cart/syncCart',
     async (cartItems: Record<string, number>, { rejectWithValue }) => {
         try {
+            const token = getAuthToken()
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            }
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`
+            }
+            
             // Convert object to array format
             const cart = Object.entries(cartItems).map(([productId, quantity]) => ({
                 productId,
                 quantity,
             }))
             
-            const response = await fetch('/api/cart', {
+            const response = await fetch(`${API_BASE_URL}/api/cart`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({ cart }),
-                credentials: 'include',
             })
             
             const data = await response.json()

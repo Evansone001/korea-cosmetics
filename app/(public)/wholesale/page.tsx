@@ -228,7 +228,7 @@ export default function Wholesale() {
                 <div className="bg-slate-50 rounded-2xl p-8 text-center">
                     <h2 className="text-2xl font-bold text-slate-900 mb-4">Ready to Start Your Wholesale Journey?</h2>
                     <p className="text-slate-600 mb-6 max-w-2xl mx-auto">
-                        Join hundreds of retailers and distributors across Africa who trust KoreaBeauty Hub for authentic Korean cosmetics.
+                        Join hundreds of retailers and distributors across Africa who trust KoreaCosmetics' Hub for authentic Korean cosmetics.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <button className="bg-pink-500 text-white px-8 py-3 rounded-lg hover:bg-pink-600 transition-colors font-medium inline-flex items-center justify-center">

@@ -1,4 +1,4 @@
-// AI Types and Interfaces for KoreaBeauty Hub AI Engine
+// AI Types and Interfaces for KoreaCosmetics' Hub AI Engine
 
 export interface AIForecast {
     id: string

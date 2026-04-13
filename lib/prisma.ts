@@ -11,7 +11,7 @@ const shouldUseMock = process.env.NODE_ENV === 'development' ||
 // Mock Prisma client for development
 class MockPrismaClient {
   constructor() {
-    console.log('🔧 MockPrismaClient initialized for development')
+    console.log(' MockPrismaClient initialized for development')
   }
 
   async findUnique(args?: any) { 

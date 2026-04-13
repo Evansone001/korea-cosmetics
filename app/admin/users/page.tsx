@@ -1,9 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
     Search, Filter, MoreHorizontal, Shield, Store, User, 
     CheckCircle, XCircle, Clock, Edit2, Ban, Unlock,
-    ChevronDown, Download, Plus, Mail, Phone
+    ChevronDown, Download, Plus, Mail, Phone, Loader2
 } from 'lucide-react'
 
 interface UserData {
@@ -51,92 +51,285 @@ export default function AdminUsers() {
     const [selectedUsers, setSelectedUsers] = useState<string[]>([])
     const [showRoleModal, setShowRoleModal] = useState(false)
     const [selectedUser, setSelectedUser] = useState<UserData | null>(null)
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+    
+    // Delete confirmation modal state
+    const [showDeleteModal, setShowDeleteModal] = useState(false)
+    const [userToDelete, setUserToDelete] = useState<UserData | null>(null)
+    const [confirmName, setConfirmName] = useState('')
+    const [deleteError, setDeleteError] = useState('')
+    
+    // Add User modal state
+    const [showAddUserModal, setShowAddUserModal] = useState(false)
+    const [newUserData, setNewUserData] = useState({
+        first_name: '',
+        last_name: '',
+        email: '',
+        password: '',
+        role: 'customer' as 'admin' | 'seller' | 'customer',
+        phone: ''
+    })
+    const [addUserError, setAddUserError] = useState('')
+    const [addUserLoading, setAddUserLoading] = useState(false)
 
-    // Sample users data
-    const [users, setUsers] = useState<UserData[]>([
-        {
-            id: 'user_1',
-            name: 'John Smith',
-            email: 'john.smith@example.com',
-            phone: '+254 712 345 678',
-            role: 'admin',
-            status: 'active',
-            joinedDate: '2026-01-15',
-            lastActive: '2 min ago',
-            ordersCount: 0,
-            totalSpent: 0
-        },
-        {
-            id: 'user_2',
-            name: 'Jane Doe',
-            email: 'jane.doe@kbeauty.com',
-            phone: '+254 723 456 789',
-            role: 'seller',
-            status: 'active',
-            joinedDate: '2026-02-20',
-            lastActive: '15 min ago',
-            ordersCount: 156,
-            totalSpent: 458900
-        },
-        {
-            id: 'user_3',
-            name: 'Alice Johnson',
-            email: 'alice.j@example.com',
-            phone: '+254 734 567 890',
-            role: 'customer',
-            status: 'active',
-            joinedDate: '2026-03-10',
-            lastActive: '1 hour ago',
-            ordersCount: 12,
-            totalSpent: 45600
-        },
-        {
-            id: 'user_4',
-            name: 'Bob Williams',
-            email: 'bob.w@example.com',
-            role: 'customer',
-            status: 'suspended',
-            joinedDate: '2026-01-25',
-            lastActive: '3 days ago',
-            ordersCount: 5,
-            totalSpent: 12300
-        },
-        {
-            id: 'user_5',
-            name: 'Carol Martinez',
-            email: 'carol.m@seoulglow.co.ke',
-            phone: '+254 745 678 901',
-            role: 'seller',
-            status: 'active',
-            joinedDate: '2026-02-15',
-            lastActive: '30 min ago',
-            ordersCount: 89,
-            totalSpent: 234500
-        },
-        {
-            id: 'user_6',
-            name: 'David Brown',
-            email: 'david.b@example.com',
-            role: 'customer',
-            status: 'banned',
-            joinedDate: '2026-01-10',
-            lastActive: 'Never',
-            ordersCount: 0,
-            totalSpent: 0
+    // Fetch users from API
+    useEffect(() => {
+        fetchUsers()
+    }, [])
+
+    const fetchUsers = async () => {
+        try {
+            setLoading(true)
+            const response = await fetch('/api/auth/admin/users', {
+                credentials: 'include'
+            })
+            
+            if (response.status === 401) {
+                setError('Unauthorized. Please login as admin.')
+                setLoading(false)
+                return
+            }
+            
+            if (response.status === 403) {
+                setError('Access denied. Admin privileges required.')
+                setLoading(false)
+                return
+            }
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch users')
+            }
+            
+            const data = await response.json()
+            
+            // Transform API response to match UserData interface
+            const transformedUsers: UserData[] = data.users.map((user: any) => ({
+                id: user.id,
+                name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Unknown',
+                email: user.email,
+                phone: user.phone,
+                role: (user.role?.toLowerCase() || 'customer') as 'admin' | 'seller' | 'customer',
+                status: user.is_active ? 'active' : 'suspended',
+                joinedDate: user.created_at ? new Date(user.created_at).toISOString().split('T')[0] : '',
+                lastActive: user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never',
+                ordersCount: 0, // Can be fetched from orders API
+                totalSpent: 0
+            }))
+            
+            setUsers(transformedUsers)
+            setError(null)
+        } catch (err) {
+            setError('Failed to load users. Please try again.')
+            console.error('Error fetching users:', err)
+        } finally {
+            setLoading(false)
         }
-    ])
-
-    const handleRoleChange = (userId: string, newRole: 'admin' | 'seller' | 'customer') => {
-        setUsers(prev => prev.map(user => 
-            user.id === userId ? { ...user, role: newRole } : user
-        ))
-        setShowRoleModal(false)
     }
 
-    const handleStatusChange = (userId: string, newStatus: 'active' | 'suspended' | 'banned') => {
-        setUsers(prev => prev.map(user => 
-            user.id === userId ? { ...user, status: newStatus } : user
-        ))
+    // API functions for user management
+    const updateUserRole = async (userId: string, newRole: string) => {
+        try {
+            const token = localStorage.getItem('token')
+            const response = await fetch(`/api/auth/admin/users/${userId}/role`, {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                credentials: 'include',
+                body: JSON.stringify({ role: newRole })
+            })
+            
+            if (!response.ok) {
+                const error = await response.json()
+                throw new Error(error.error || 'Failed to update role')
+            }
+            
+            return true
+        } catch (err) {
+            console.error('Error updating role:', err)
+            alert(err instanceof Error ? err.message : 'Failed to update role')
+            return false
+        }
+    }
+
+    const updateUserStatus = async (userId: string, isActive: boolean) => {
+        try {
+            const token = localStorage.getItem('token')
+            const response = await fetch(`/api/auth/admin/users/${userId}/status`, {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                credentials: 'include',
+                body: JSON.stringify({ is_active: isActive })
+            })
+            
+            if (!response.ok) {
+                const error = await response.json()
+                throw new Error(error.error || 'Failed to update status')
+            }
+            
+            return true
+        } catch (err) {
+            console.error('Error updating status:', err)
+            alert(err instanceof Error ? err.message : 'Failed to update status')
+            return false
+        }
+    }
+
+    const openDeleteModal = (user: UserData) => {
+        setUserToDelete(user)
+        setConfirmName('')
+        setDeleteError('')
+        setShowDeleteModal(true)
+    }
+
+    const closeDeleteModal = () => {
+        setShowDeleteModal(false)
+        setUserToDelete(null)
+        setConfirmName('')
+        setDeleteError('')
+    }
+
+    const executeDelete = async () => {
+        if (!userToDelete) return
+        
+        // Verify the name matches
+        if (confirmName.trim() !== userToDelete.name) {
+            setDeleteError('Name does not match. Please type the exact user name to confirm.')
+            return
+        }
+        
+        try {
+            const response = await fetch(`/api/auth/admin/users/${userToDelete.id}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            })
+            
+            if (!response.ok) {
+                const error = await response.json()
+                throw new Error(error.error || 'Failed to delete user')
+            }
+            
+            // Remove user from list
+            setUsers(prev => prev.filter(user => user.id !== userToDelete.id))
+            closeDeleteModal()
+            return true
+        } catch (err) {
+            console.error('Error deleting user:', err)
+            setDeleteError(err instanceof Error ? err.message : 'Failed to delete user')
+            return false
+        }
+    }
+
+    const openAddUserModal = () => {
+        setNewUserData({
+            first_name: '',
+            last_name: '',
+            email: '',
+            password: '',
+            role: 'customer',
+            phone: ''
+        })
+        setAddUserError('')
+        setShowAddUserModal(true)
+    }
+
+    const closeAddUserModal = () => {
+        setShowAddUserModal(false)
+        setAddUserError('')
+    }
+
+    const handleCreateUser = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setAddUserError('')
+        
+        // Validation
+        if (!newUserData.first_name || !newUserData.last_name || !newUserData.email || !newUserData.password) {
+            setAddUserError('Please fill in all required fields')
+            return
+        }
+        
+        if (newUserData.password.length < 8) {
+            setAddUserError('Password must be at least 8 characters')
+            return
+        }
+        
+        setAddUserLoading(true)
+        
+        try {
+            const response = await fetch('/api/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    first_name: newUserData.first_name,
+                    last_name: newUserData.last_name,
+                    email: newUserData.email,
+                    password: newUserData.password,
+                    phone: newUserData.phone || undefined,
+                    role: newUserData.role
+                })
+            })
+            
+            const data = await response.json()
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to create user')
+            }
+            
+            // Add new user to list
+            const newUser: UserData = {
+                id: data.user.id,
+                name: `${data.user.first_name} ${data.user.last_name}`,
+                email: data.user.email,
+                phone: data.user.phone,
+                role: data.user.role.toLowerCase() as 'admin' | 'seller' | 'customer',
+                status: data.user.is_active ? 'active' : 'suspended',
+                joinedDate: data.user.created_at ? new Date(data.user.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                lastActive: 'Just now',
+                ordersCount: 0,
+                totalSpent: 0
+            }
+            
+            setUsers(prev => [...prev, newUser])
+            closeAddUserModal()
+            alert('User created successfully!')
+        } catch (err) {
+            console.error('Error creating user:', err)
+            setAddUserError(err instanceof Error ? err.message : 'Failed to create user')
+        } finally {
+            setAddUserLoading(false)
+        }
+    }
+
+    const [users, setUsers] = useState<UserData[]>([])
+
+    const handleRoleChange = async (userId: string, newRole: 'admin' | 'seller' | 'customer') => {
+        const success = await updateUserRole(userId, newRole)
+        if (success) {
+            setUsers(prev => prev.map(user => 
+                user.id === userId ? { ...user, role: newRole } : user
+            ))
+            setShowRoleModal(false)
+        }
+    }
+
+    const handleStatusChange = async (userId: string, newStatus: 'active' | 'suspended' | 'banned') => {
+        const isActive = newStatus === 'active'
+        const success = await updateUserStatus(userId, isActive)
+        if (success) {
+            setUsers(prev => prev.map(user => 
+                user.id === userId ? { ...user, status: newStatus } : user
+            ))
+        }
+    }
+
+    const handleDeleteUser = (user: UserData) => {
+        openDeleteModal(user)
     }
 
     const filteredUsers = users.filter(user => {
@@ -193,7 +386,10 @@ export default function AdminUsers() {
                         <Download className="w-4 h-4" />
                         Export
                     </button>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors shadow-lg shadow-slate-900/20">
+                    <button 
+                        onClick={openAddUserModal}
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors shadow-lg shadow-slate-900/20"
+                    >
                         <Plus className="w-4 h-4" />
                         Add User
                     </button>
@@ -261,6 +457,38 @@ export default function AdminUsers() {
                 </div>
             </div>
 
+            {/* Error Display */}
+            {error && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-red-100 rounded-lg">
+                            <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h4 className="font-medium text-red-800">{error}</h4>
+                            <p className="text-sm text-red-600 mt-1">
+                                To create admin/seller accounts, use the CLI: <code className="bg-red-100 px-1.5 py-0.5 rounded">python manage_users.py create-admin &lt;email&gt; &lt;password&gt; &lt;first_name&gt; &lt;last_name&gt;</code>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Loading State */}
+            {loading && (
+                <div className="bg-white rounded-xl border border-slate-200 p-12 shadow-sm">
+                    <div className="flex flex-col items-center justify-center">
+                        <Loader2 className="w-12 h-12 text-slate-400 animate-spin mb-4" />
+                        <p className="text-slate-500">Loading users...</p>
+                    </div>
+                </div>
+            )}
+
+            {/* No Loading/Error - Show Content */}
+            {!loading && !error && (
+                <>
             {/* Filters */}
             <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm">
                 <div className="flex flex-col lg:flex-row gap-4">
@@ -423,6 +651,15 @@ export default function AdminUsers() {
                                             >
                                                 <Ban className="w-4 h-4" />
                                             </button>
+                                            <button 
+                                                onClick={() => handleDeleteUser(user)}
+                                                className="p-2 hover:bg-red-100 rounded-lg text-red-700 transition-colors"
+                                                title="Delete User"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -483,6 +720,182 @@ export default function AdminUsers() {
                         </button>
                     </div>
                 </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteModal && userToDelete && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">Delete User</h3>
+                                <p className="text-sm text-slate-500">This action cannot be undone</p>
+                            </div>
+                        </div>
+                        
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                            <p className="text-sm text-slate-700 mb-2">
+                                You are about to delete: <strong className="text-red-700">{userToDelete.name}</strong>
+                            </p>
+                            <p className="text-sm text-slate-600">
+                                Email: {userToDelete.email}
+                            </p>
+                        </div>
+
+                        <p className="text-sm text-slate-700 mb-3">
+                            To confirm deletion, please type the user's full name below:
+                        </p>
+                        
+                        <input
+                            type="text"
+                            value={confirmName}
+                            onChange={(e) => {
+                                setConfirmName(e.target.value)
+                                setDeleteError('')
+                            }}
+                            placeholder={`Type "${userToDelete.name}" to confirm`}
+                            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent mb-3"
+                        />
+                        
+                        {deleteError && (
+                            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                <p className="text-sm text-red-600">{deleteError}</p>
+                            </div>
+                        )}
+
+                        <div className="flex gap-3">
+                            <button 
+                                onClick={closeDeleteModal}
+                                className="flex-1 py-2.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={executeDelete}
+                                disabled={confirmName !== userToDelete.name}
+                                className="flex-1 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Delete User
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Add User Modal */}
+            {showAddUserModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+                        <h3 className="text-xl font-bold text-slate-800 mb-2">Add New User</h3>
+                        <p className="text-slate-500 mb-6">Create a new user account</p>
+                        
+                        <form onSubmit={handleCreateUser} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">First Name *</label>
+                                    <input
+                                        type="text"
+                                        value={newUserData.first_name}
+                                        onChange={(e) => setNewUserData({...newUserData, first_name: e.target.value})}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                                        placeholder="John"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Last Name *</label>
+                                    <input
+                                        type="text"
+                                        value={newUserData.last_name}
+                                        onChange={(e) => setNewUserData({...newUserData, last_name: e.target.value})}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                                        placeholder="Doe"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Email *</label>
+                                <input
+                                    type="email"
+                                    value={newUserData.email}
+                                    onChange={(e) => setNewUserData({...newUserData, email: e.target.value})}
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                                    placeholder="user@example.com"
+                                    required
+                                />
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Password *</label>
+                                <input
+                                    type="password"
+                                    value={newUserData.password}
+                                    onChange={(e) => setNewUserData({...newUserData, password: e.target.value})}
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                                    placeholder="Min 8 characters"
+                                    minLength={8}
+                                    required
+                                />
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
+                                <input
+                                    type="tel"
+                                    value={newUserData.phone}
+                                    onChange={(e) => setNewUserData({...newUserData, phone: e.target.value})}
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                                    placeholder="+254 712 345 678"
+                                />
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Role *</label>
+                                <select
+                                    value={newUserData.role}
+                                    onChange={(e) => setNewUserData({...newUserData, role: e.target.value as 'admin' | 'seller' | 'customer'})}
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+                                >
+                                    <option value="customer">Customer</option>
+                                    <option value="seller">Seller</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </div>
+                            
+                            {addUserError && (
+                                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                                    <p className="text-sm text-red-600">{addUserError}</p>
+                                </div>
+                            )}
+                            
+                            <div className="flex gap-3 pt-2">
+                                <button 
+                                    type="button"
+                                    onClick={closeAddUserModal}
+                                    className="flex-1 py-2.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    type="submit"
+                                    disabled={addUserLoading}
+                                    className="flex-1 py-2.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    {addUserLoading ? 'Creating...' : 'Create User'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+            </>
             )}
         </div>
     )

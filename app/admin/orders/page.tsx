@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
     Search, Filter, Package, Truck, CheckCircle, XCircle, Clock,
     MapPin, User, Calendar, DollarSign, MoreHorizontal, Eye,
@@ -7,6 +7,8 @@ import {
     Box, ShoppingBag, AlertCircle, RotateCcw, UserCheck, Store
 } from 'lucide-react'
 import Link from 'next/link'
+import { apiClient } from '@/lib/api-client'
+import toast from 'react-hot-toast'
 
 interface OrderItem {
     id: string
@@ -81,169 +83,111 @@ export default function AdminOrders() {
     const [showAssignModal, setShowAssignModal] = useState(false)
     const [showTrackingModal, setShowTrackingModal] = useState(false)
     const [trackingNumber, setTrackingNumber] = useState('')
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
 
-    // Sample orders data
-    const [orders, setOrders] = useState<Order[]>([
-        {
-            id: 'ord_1',
-            orderNumber: 'ORD-2026-001',
-            type: 'retail',
-            customer: {
-                name: 'Jane Doe',
-                email: 'jane.doe@example.com',
-                phone: '+254 712 345 678',
-                address: '123 Kimathi Street, Nairobi, Kenya'
-            },
-            items: [
-                { id: 'item_1', name: 'Korean Snail Mucin Essence', quantity: 2, price: 1299 },
-                { id: 'item_2', name: 'Vitamin C Brightening Serum', quantity: 1, price: 899 }
-            ],
-            status: 'pending',
-            paymentStatus: 'paid',
-            paymentMethod: 'M-Pesa',
-            subtotal: 3497,
-            shipping: 150,
-            tax: 0,
-            total: 3647,
-            createdAt: '2026-01-15T10:30:00',
-            updatedAt: '2026-01-15T10:30:00'
-        },
-        {
-            id: 'ord_2',
-            orderNumber: 'ORD-2026-002',
-            type: 'b2b',
-            customer: {
-                name: 'John Smith',
-                email: 'john.smith@kbeauty.com',
-                phone: '+254 723 456 789',
-                address: '456 Moi Avenue, Mombasa, Kenya',
-                company: 'KBeauty Kenya Ltd'
-            },
-            items: [
-                { id: 'item_3', name: 'Hyaluronic Acid Moisturizer (Bulk)', quantity: 50, price: 599 },
-                { id: 'item_4', name: 'Retinol Night Cream (Bulk)', quantity: 30, price: 1199 }
-            ],
-            status: 'processing',
-            paymentStatus: 'paid',
-            paymentMethod: 'Bank Transfer',
-            subtotal: 65950,
-            shipping: 0,
-            tax: 9892,
-            total: 75842,
-            createdAt: '2026-01-15T09:15:00',
-            updatedAt: '2026-01-15T11:20:00',
-            assignedTo: 'staff_1'
-        },
-        {
-            id: 'ord_3',
-            orderNumber: 'ORD-2026-003',
-            type: 'retail',
-            customer: {
-                name: 'Alice Johnson',
-                email: 'alice.j@example.com',
-                phone: '+254 734 567 890',
-                address: '789 Kenyatta Avenue, Kisumu, Kenya'
-            },
-            items: [
-                { id: 'item_5', name: 'Niacinamide Serum 10%', quantity: 3, price: 699 }
-            ],
-            status: 'shipped',
-            paymentStatus: 'paid',
-            paymentMethod: 'M-Pesa',
-            subtotal: 2097,
-            shipping: 150,
-            tax: 0,
-            total: 2247,
-            createdAt: '2026-01-14T16:45:00',
-            updatedAt: '2026-01-15T08:30:00',
-            assignedTo: 'staff_2',
-            trackingNumber: 'KEN123456789',
-            notes: 'Customer requested morning delivery'
-        },
-        {
-            id: 'ord_4',
-            orderNumber: 'ORD-2026-004',
-            type: 'b2b',
-            customer: {
-                name: 'Bob Williams',
-                email: 'bob@seoulbeauty.co.ke',
-                phone: '+254 745 678 901',
-                address: '321 Tom Mboya Street, Nakuru, Kenya',
-                company: 'Seoul Beauty Supply'
-            },
-            items: [
-                { id: 'item_6', name: 'Sunscreen SPF 50 (Bulk)', quantity: 100, price: 699 }
-            ],
-            status: 'delivered',
-            paymentStatus: 'paid',
-            paymentMethod: 'Bank Transfer',
-            subtotal: 69900,
-            shipping: 0,
-            tax: 10485,
-            total: 80385,
-            createdAt: '2026-01-13T14:20:00',
-            updatedAt: '2026-01-14T16:30:00',
-            assignedTo: 'staff_3'
-        },
-        {
-            id: 'ord_5',
-            orderNumber: 'ORD-2026-005',
-            type: 'retail',
-            customer: {
-                name: 'Carol Martinez',
-                email: 'carol.m@example.com',
-                phone: '+254 756 789 012',
-                address: '654 Haile Selassie Avenue, Nairobi, Kenya'
-            },
-            items: [
-                { id: 'item_7', name: 'Aloe Vera Gel', quantity: 1, price: 499 }
-            ],
-            status: 'cancelled',
-            paymentStatus: 'refunded',
-            paymentMethod: 'M-Pesa',
-            subtotal: 499,
-            shipping: 0,
-            tax: 0,
-            total: 499,
-            createdAt: '2026-01-13T11:00:00',
-            updatedAt: '2026-01-13T12:15:00',
-            cancelledAt: '2026-01-13T12:15:00',
-            cancelledBy: 'customer',
-            cancelReason: 'Changed my mind - found alternative product'
-        },
-        {
-            id: 'ord_6',
-            orderNumber: 'ORD-2026-006',
-            type: 'b2b',
-            customer: {
-                name: 'David Kim',
-                email: 'david@asiaimports.co.ke',
-                phone: '+254 767 890 123',
-                address: '789 Biashara Street, Nairobi, Kenya',
-                company: 'Asia Imports Ltd'
-            },
-            items: [
-                { id: 'item_8', name: 'Premium Face Mask Set (Bulk)', quantity: 200, price: 299 },
-                { id: 'item_9', name: 'Collagen Eye Patches (Bulk)', quantity: 150, price: 399 }
-            ],
-            status: 'pending',
-            paymentStatus: 'pending',
-            paymentMethod: 'Bank Transfer',
-            subtotal: 119650,
-            shipping: 0,
-            tax: 17947,
-            total: 137597,
-            createdAt: '2026-01-16T08:00:00',
-            updatedAt: '2026-01-16T08:00:00'
+    // Orders data from backend
+    const [orders, setOrders] = useState<Order[]>([])
+
+    // Fetch orders from backend
+    const fetchOrders = async () => {
+        try {
+            setLoading(true)
+            setError(null)
+
+            // Fetch both B2C and B2B orders
+            const [b2cResponse, b2bResponse] = await Promise.all([
+                apiClient.getStoreOrders({ status: statusFilter === 'all' ? undefined : statusFilter }),
+                apiClient.getWholesaleOrders({ status: statusFilter === 'all' ? undefined : statusFilter })
+            ])
+
+            // Map backend data to frontend Order interface
+            const mappedOrders: Order[] = []
+
+            // Process B2C orders
+            if (b2cResponse.orders) {
+                b2cResponse.orders.forEach((order: any) => {
+                    mappedOrders.push({
+                        id: order.id,
+                        orderNumber: `ORD-${order.id.slice(0, 8).toUpperCase()}`,
+                        type: 'retail',
+                        customer: {
+                            name: order.customer?.name || 'Unknown',
+                            email: order.customer?.email || '',
+                            phone: order.customer?.phone || '',
+                            address: order.shipping_address?.street || ''
+                        },
+                        items: order.items || [],
+                        status: order.status,
+                        paymentStatus: order.is_paid ? 'paid' : 'pending',
+                        paymentMethod: order.payment_method || 'Unknown',
+                        total: order.total,
+                        subtotal: order.total,
+                        shipping: 0,
+                        tax: 0,
+                        createdAt: order.created_at,
+                        updatedAt: order.updated_at,
+                        trackingNumber: order.tracking_number
+                    })
+                })
+            }
+
+            // Process B2B orders
+            if (b2bResponse.orders) {
+                b2bResponse.orders.forEach((order: any) => {
+                    mappedOrders.push({
+                        id: order.id,
+                        orderNumber: `B2B-${order.id.slice(0, 8).toUpperCase()}`,
+                        type: 'b2b',
+                        customer: {
+                            name: order.customer?.name || 'Unknown',
+                            email: order.customer?.email || '',
+                            phone: order.customer?.phone || '',
+                            address: order.shipping_address?.street || '',
+                            company: order.store_name || ''
+                        },
+                        items: order.items || [],
+                        status: order.status,
+                        paymentStatus: order.is_paid ? 'paid' : 'pending',
+                        paymentMethod: order.payment_method || 'Unknown',
+                        total: order.total,
+                        subtotal: order.total,
+                        shipping: 0,
+                        tax: 0,
+                        createdAt: order.created_at,
+                        updatedAt: order.updated_at,
+                        trackingNumber: order.tracking_number
+                    })
+                })
+            }
+
+            setOrders(mappedOrders)
+        } catch (err) {
+            console.error('Failed to fetch orders:', err)
+            setError('Failed to load orders')
+            toast.error('Failed to load orders')
+        } finally {
+            setLoading(false)
         }
-    ])
+    }
 
-    const handleStatusChange = (orderId: string, newStatus: Order['status']) => {
-        setOrders(prev => prev.map(order => 
-            order.id === orderId 
-                ? { ...order, status: newStatus, updatedAt: new Date().toISOString() }
-                : order
-        ))
+    useEffect(() => {
+        fetchOrders()
+    }, [])
+
+    useEffect(() => {
+        fetchOrders()
+    }, [statusFilter])
+
+    const handleStatusChange = async (orderId: string, newStatus: Order['status']) => {
+        try {
+            await apiClient.updateOrderStatus(orderId, newStatus)
+            toast.success(`Order status updated to ${newStatus}`)
+            fetchOrders()
+        } catch (error) {
+            console.error('Failed to update order status:', error)
+            toast.error('Failed to update order status')
+        }
     }
 
     const handleAssignDelivery = (orderId: string, staffId: string) => {
@@ -255,12 +199,15 @@ export default function AdminOrders() {
         setShowAssignModal(false)
     }
 
-    const handleShipOrder = (orderId: string, trackingNum: string) => {
-        setOrders(prev => prev.map(order => 
-            order.id === orderId 
-                ? { ...order, status: 'shipped', trackingNumber: trackingNum, updatedAt: new Date().toISOString() }
-                : order
-        ))
+    const handleShipOrder = async (orderId: string, trackingNum: string) => {
+        try {
+            await apiClient.fulfillOrder(orderId, trackingNum)
+            toast.success('Order shipped successfully')
+            fetchOrders()
+        } catch (error) {
+            console.error('Failed to ship order:', error)
+            toast.error('Failed to ship order')
+        }
         setShowTrackingModal(false)
         setTrackingNumber('')
     }
@@ -316,6 +263,26 @@ export default function AdminOrders() {
                     <h1 className="text-2xl font-bold text-slate-800">Order Management</h1>
                     <p className="text-slate-500 mt-1">Track and manage all customer orders</p>
                 </div>
+            </div>
+
+            {/* Loading State */}
+            {loading && (
+                <div className="flex items-center justify-center py-12">
+                    <div className="text-slate-500">Loading orders...</div>
+                </div>
+            )}
+
+            {/* Error State */}
+            {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                    <p className="text-red-600">{error}</p>
+                </div>
+            )}
+
+            {/* Content */}
+            {!loading && !error && (
+            <>
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
                 <div className="flex items-center gap-3">
                     <Link 
                         href="/admin/orders/retail"
@@ -893,7 +860,7 @@ export default function AdminOrders() {
                             ))}
                         </div>
                         
-                        <button 
+                        <button
                             onClick={() => setShowAssignModal(false)}
                             className="w-full py-2.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors"
                         >
@@ -901,6 +868,8 @@ export default function AdminOrders() {
                         </button>
                     </div>
                 </div>
+            )}
+            </>
             )}
         </div>
     )

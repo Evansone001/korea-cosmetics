@@ -1,6 +1,6 @@
 // Shared JWT utilities using Web Crypto API (Edge & Node compatible)
 
-const JWT_SECRET = process.env.JWT_SECRET || 'demo-secret-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET_KEY || 'jwt-secret-string-change-in-production';
 
 export interface JWTPayload {
   sub: string;

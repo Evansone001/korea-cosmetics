@@ -11,7 +11,7 @@ import {
     ForecastDataPoint
 } from '@/lib/types/ai'
 
-// AI Engine Service - Central intelligence system for KoreaBeauty Hub
+// AI Engine Service - Central intelligence system for KoreaCosmetics' Hub
 export class AIEngine {
     private static instance: AIEngine
     private models: AIModelConfig[] = []

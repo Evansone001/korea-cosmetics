@@ -296,7 +296,7 @@ const Navbar = () => {
                                             className="object-cover rounded-lg"
                                         />
                                     </div>
-                                    <span className="ml-2 font-semibold text-slate-800">KoreaBeauty</span>
+                                    <span className="ml-2 font-semibold text-slate-800">KoreaCosmetics'</span>
                                 </Link>
                                 <button
                                     onClick={() => setIsMobileMenuOpen(false)}

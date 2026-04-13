@@ -8,44 +8,78 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import type { Product, CartItem } from "@/types";
+import { apiClient } from "@/lib/api-client";
 
 export default function Cart() {
 
     const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || '$';
     
     const { cartItems } = useAppSelector(state => state.cart);
-    const products = useAppSelector(state => state.product.list);
 
     const dispatch = useAppDispatch();
 
     const [cartArray, setCartArray] = useState<CartItem[]>([]);
     const [totalPrice, setTotalPrice] = useState(0);
+    const [loading, setLoading] = useState(true);
 
-    const createCartArray = () => {
-        setTotalPrice(0);
-        const newCartArray: CartItem[] = [];
-        for (const [key, value] of Object.entries(cartItems)) {
-            const product = products.find(product => product.id === key);
-            if (product) {
-                newCartArray.push({
-                    product: product,
-                    quantity: value,
-                });
-                setTotalPrice(prev => prev + product.price * value);
-            }
+    const fetchCartProducts = async () => {
+        setLoading(true);
+        const productIds = Object.keys(cartItems);
+        
+        if (productIds.length === 0) {
+            setCartArray([]);
+            setTotalPrice(0);
+            setLoading(false);
+            return;
         }
-        setCartArray(newCartArray);
+
+        try {
+            // Fetch product details for each cart item
+            const productPromises = productIds.map(id => 
+                apiClient.getProduct(id).catch(() => null)
+            );
+            const products = await Promise.all(productPromises);
+            
+            const newCartArray: CartItem[] = [];
+            let total = 0;
+            
+            productIds.forEach((id, index) => {
+                const product = products[index] as Product | null;
+                const quantity = cartItems[id];
+                if (product && quantity && product.price) {
+                    newCartArray.push({
+                        product: product,
+                        quantity: quantity,
+                    });
+                    total += product.price * quantity;
+                }
+            });
+            
+            setCartArray(newCartArray);
+            setTotalPrice(total);
+        } catch (error) {
+            console.error('Failed to fetch cart products:', error);
+        } finally {
+            setLoading(false);
+        }
     }
 
     const handleDeleteItemFromCart = (productId: string) => {
         dispatch(deleteItemFromCart({ productId }))
     }
 
+    // Fetch cart products whenever cartItems change
     useEffect(() => {
-        if (products.length > 0) {
-            createCartArray();
-        }
-    }, [cartItems, products]);
+        fetchCartProducts()
+    }, [cartItems])
+
+    if (loading) {
+        return (
+            <div className="min-h-[80vh] mx-6 flex items-center justify-center text-slate-400">
+                <div className="w-8 h-8 border-2 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
+            </div>
+        );
+    }
 
     return cartArray.length > 0 ? (
         <div className="min-h-screen mx-6 text-slate-800">
@@ -71,7 +105,11 @@ export default function Cart() {
                                     <tr key={index} className="space-x-2">
                                         <td className="flex gap-3 my-4">
                                             <div className="flex gap-3 items-center justify-center bg-slate-100 size-18 rounded-md">
-                                                <Image src={item.product.images[0]} className="h-14 w-auto" alt="" width={45} height={45} />
+                                                {item.product.images && item.product.images.length > 0 ? (
+                                                    <Image src={item.product.images[0]} className="h-14 w-auto" alt="" width={45} height={45} />
+                                                ) : (
+                                                    <span className="text-2xl">📦</span>
+                                                )}
                                             </div>
                                             <div>
                                                 <p className="max-sm:text-sm">{item.product.name}</p>

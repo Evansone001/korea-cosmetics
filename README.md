@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>KoreaBeauty Hub</h1>
+  <h1>KoreaCosmetics' Hub</h1>
   <p>
     <strong>Premium Korean Cosmetics B2B Platform</strong>
   </p>
@@ -89,7 +89,7 @@
    
    # App Config
    NEXT_PUBLIC_CURRENCY_SYMBOL="$"
-   NEXT_PUBLIC_APP_NAME="KoreaBeauty Hub"
+   NEXT_PUBLIC_APP_NAME="KoreaCosmetics' Hub"
    ```
 
 4. **Database Setup**
@@ -231,7 +231,7 @@ This project is licensed under the MIT License - see [LICENSE.md](./LICENSE.md) 
 
 ## Support
 
-For support, email contact@koreabeautyhub.com or open an issue on GitHub.
+For support, email contact@KoreaCosmetics'hub.com or open an issue on GitHub.
 
 ---
 
@@ -245,5 +245,5 @@ For support, email contact@koreabeautyhub.com or open an issue on GitHub.
 
 <div align="center">
   <p>Built with ❤️ in Kenya for the African market</p>
-  <p><strong>KoreaBeauty Hub</strong> - Bringing the best of K-beauty to Africa</p>
+  <p><strong>KoreaCosmetics' Hub</strong> - Bringing the best of K-beauty to Africa</p>
 </div>

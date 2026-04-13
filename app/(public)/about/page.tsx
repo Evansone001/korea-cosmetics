@@ -47,7 +47,7 @@ export default function About() {
         <div className="min-h-screen mx-6 text-slate-800">
             <div className="max-w-7xl mx-auto py-8">
                 <PageTitle 
-                    heading="About KoreaBeauty Hub" 
+                    heading="About KoreaCosmetics' Hub" 
                     text="Your trusted gateway to authentic Korean cosmetics in Africa" 
                     linkText="Back to Home" 
                     path="/" 
@@ -61,7 +61,7 @@ export default function About() {
                                 Bridging Korean Beauty with Africa
                             </h1>
                             <p className="text-lg text-slate-600 mb-6">
-                                KoreaBeauty Hub is East Africa's premier Korean cosmetics B2B platform, 
+                                KoreaCosmetics' Hub is East Africa's premier Korean cosmetics B2B platform, 
                                 connecting African retailers and distributors with authentic Korean beauty products. 
                                 Founded in 2009 and based in Nairobi, Kenya, we've become the trusted partner 
                                 for businesses seeking access to the booming K-beauty market.
@@ -190,7 +190,7 @@ export default function About() {
 
                 {/* Why Choose Us */}
                 <div className="bg-gradient-to-r from-pink-500 to-rose-500 rounded-2xl p-8 text-white text-center">
-                    <h2 className="text-2xl font-bold mb-4">Why Choose KoreaBeauty Hub?</h2>
+                    <h2 className="text-2xl font-bold mb-4">Why Choose KoreaCosmetics' Hub?</h2>
                     <p className="text-pink-50 mb-6 max-w-2xl mx-auto">
                         We're not just a platform - we're your strategic partner in the Korean beauty business. 
                         Our expertise, relationships, and commitment to your success set us apart.

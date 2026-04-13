@@ -16,22 +16,6 @@ export function validateApiKey(request: NextRequest): boolean {
   return apiKey === validKey;
 }
 
-// Role-based access control
-export function requireRole(role: 'admin' | 'store') {
-  return function(request: NextRequest): boolean {
-    // In production, this would verify JWT token and check user role
-    // For now, using header-based role identification
-    const userRole = request.headers.get('X-User-Role');
-    const userId = request.headers.get('X-User-Id');
-    
-    if (!userRole || !userId) {
-      return false;
-    }
-    
-    return userRole === role;
-  };
-}
-
 // Webhook signature verification
 export function verifyWebhookSignature(
   payload: string,
@@ -242,10 +226,18 @@ export function validateProductDistribution(data: unknown): {
 export function checkCors(request: NextRequest): boolean {
   const origin = request.headers.get('origin');
   const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
-  
+
   if (!origin) return true; // Allow non-browser requests
-  
-  return allowedOrigins.some(allowed => 
+
+  return allowedOrigins.some(allowed =>
     origin === allowed || origin.endsWith(allowed)
   );
+}
+
+// Role-based access control
+export function requireRole(requiredRole: string) {
+  return function(request: NextRequest): boolean {
+    const userRole = request.headers.get('X-User-Role');
+    return userRole === requiredRole;
+  };
 }

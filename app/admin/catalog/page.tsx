@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
-  Download, 
-  RefreshCw, 
-  Package, 
-  Store, 
-  CheckCircle2, 
+import {
+  Download,
+  RefreshCw,
+  Package,
+  Store,
+  CheckCircle2,
   AlertCircle,
   Building2,
   Filter,
@@ -16,12 +16,19 @@ import {
   X,
   Edit2,
   Trash2,
-  Save
+  Save,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Warehouse,
+  Upload
 } from 'lucide-react';
 import Image from 'next/image';
 import toast from 'react-hot-toast';
+import { apiClient } from '@/lib/api-client';
 
 interface Product {
+  categories: any;
   id: string;
   name: string;
   description: string;
@@ -35,6 +42,7 @@ interface Product {
   origin: string;
   source: 'crm' | 'manual';
   createdAt: string;
+  is_warehouse_product?: boolean;
 }
 
 interface Store {
@@ -44,194 +52,342 @@ interface Store {
   status: string;
 }
 
+interface PendingProduct {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  brand?: string;
+  images: string[];
+  status: 'pending' | 'active' | 'inactive';
+  store_id: string;
+  store?: {
+    id: string;
+    name: string;
+    username: string;
+  };
+  user?: {
+    id: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    approved_product_count?: number;
+    is_trusted_seller?: boolean;
+  };
+  created_at: string;
+}
+
 export default function ProductCatalogPage() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
-  const [selectedStore, setSelectedStore] = useState<string>('');
-  const [distributing, setDistributing] = useState(false);
   const [manufacturer, setManufacturer] = useState('');
   const [category, setCategory] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [manufacturers, setManufacturers] = useState<string[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [subcategories, setSubcategories] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     price: '',
     mrp: '',
     category: '',
+    categories: [] as string[],
+    subcategories: [] as string[],
     manufacturer: '',
     brand: '',
     stock: '',
     origin: 'South Korea',
     images: [] as string[],
   });
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'crm' | 'manual'>('all');
+
+  // Add to Warehouse Modal State
+  const [warehouseModalOpen, setWarehouseModalOpen] = useState(false);
+  const [warehouseProduct, setWarehouseProduct] = useState<Product | null>(null);
+  const [warehouseFormData, setWarehouseFormData] = useState({
+    warehouse_stock: 100,
+    b2c_retail_price: '',
+    b2b_wholesale_price: '',
+    b2b_moq: 1,
+    customer_type: 'BOTH' as 'B2C' | 'B2B' | 'BOTH',
+  });
+  const [addingToWarehouse, setAddingToWarehouse] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [showManufacturerModal, setShowManufacturerModal] = useState(false);
+  const [newManufacturerName, setNewManufacturerName] = useState('');
+  const [addingManufacturer, setAddingManufacturer] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryParentId, setNewCategoryParentId] = useState<string>('');
+  const [selectedCategoryTags, setSelectedCategoryTags] = useState<any[]>([]);
+  const [selectedSubcategoryTags, setSelectedSubcategoryTags] = useState<any[]>([]);
 
   // Load products on mount
   useEffect(() => {
     fetchProducts();
-  }, [sourceFilter]);
+  }, []);
 
-  const fetchProducts = async () => {
-    try {
-      const response = await fetch(`/api/admin/products?source=${sourceFilter}`);
-      const data = await response.json();
-      if (response.ok) {
-        setProducts(data.products || []);
-      }
-    } catch (error) {
-      console.error('Failed to fetch products');
+  // Load manufacturers from backend on mount
+  useEffect(() => {
+    fetchManufacturers();
+  }, []);
+
+  // Load categories from backend on mount
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  // Helper functions for tag-based selection
+  const addCategoryTag = (category: any) => {
+    if (!selectedCategoryTags?.find((c: any) => c.id === category.id)) {
+      setSelectedCategoryTags([...(selectedCategoryTags || []), category]);
+      // Update formData.categories
+      setFormData({ ...formData, categories: [...(formData.categories || []), category.id] });
     }
   };
 
-  const manufacturers = ['COSRX', 'Innisfree', 'Some By Mi', 'Beauty of Joseon', 'Laneige', 'Etude House'];
-  const categories = ['Skincare', 'Makeup', 'Haircare', 'Bodycare', 'Fragrance'];
+  const removeCategoryTag = (categoryId: string) => {
+    setSelectedCategoryTags((selectedCategoryTags || []).filter((c: any) => c.id !== categoryId));
+    // Update formData.categories
+    setFormData({ ...formData, categories: (formData.categories || []).filter((id: string) => id !== categoryId) });
+    // Also remove subcategories that belong to this category
+    const categorySubcategories = (subcategories || []).filter((s: any) => s.parent_id === categoryId);
+    categorySubcategories.forEach((sub: any) => removeSubcategoryTag(sub.id));
+  };
 
-  const fetchCRMProducts = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (manufacturer) params.append('manufacturer', manufacturer);
-      if (category) params.append('category', category);
-
-      const response = await fetch(`/api/admin/crm-products?${params.toString()}`);
-      const data = await response.json();
-
-      if (response.ok) {
-        setProducts(prev => {
-          const existingIds = new Set(prev.map(p => p.id));
-          const newProducts = data.products.filter((p: Product) => !existingIds.has(p.id));
-          return [...prev, ...newProducts];
-        });
-        toast.success(`Found ${data.count} products from CRM`);
-      } else {
-        toast.error(data.error || 'Failed to fetch products');
+  const addSubcategoryTag = (subcategory: any) => {
+    if (!selectedSubcategoryTags?.find((s: any) => s.id === subcategory.id)) {
+      setSelectedSubcategoryTags([...(selectedSubcategoryTags || []), subcategory]);
+      // Update formData.subcategories
+      setFormData({ ...formData, subcategories: [...(formData.subcategories || []), subcategory.id] });
+      // Ensure parent category is also selected
+      const parentCategory = (categories || []).find((c: any) => c.id === subcategory.parent_id);
+      if (parentCategory && !selectedCategoryTags?.find((c: any) => c.id === parentCategory.id)) {
+        addCategoryTag(parentCategory);
       }
-    } catch (error) {
-      toast.error('Failed to connect to CRM');
-    } finally {
-      setLoading(false);
     }
   };
 
-  const syncProducts = async () => {
-    setSyncing(true);
+  const removeSubcategoryTag = (subcategoryId: string) => {
+    setSelectedSubcategoryTags((selectedSubcategoryTags || []).filter((s: any) => s.id !== subcategoryId));
+    // Update formData.subcategories
+    setFormData({ ...formData, subcategories: (formData.subcategories || []).filter((id: string) => id !== subcategoryId) });
+  };
+
+  const fetchManufacturers = async () => {
     try {
-      const response = await fetch('/api/admin/crm-products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productIds: selectedProducts.length > 0 ? selectedProducts : undefined,
-        }),
+      const response: any = await apiClient.getManufacturers();
+      const manufacturerNames = response.manufacturers?.map((m: any) => m.name) || [];
+      setManufacturers(manufacturerNames);
+    } catch (error) {
+      console.error('Failed to fetch manufacturers:', error);
+      // Fallback to default list if fetch fails
+      setManufacturers(['COSRX', 'Innisfree', 'Some By Mi', 'Beauty of Joseon', 'Laneige', 'Etude House']);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const response: any = await apiClient.getCategoriesHierarchical();
+      const mainCategories = response.categories?.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        parent_id: c.parent_id,
+        is_subcategory: c.is_subcategory,
+        children: c.children || []
+      })) || [];
+      setCategories(mainCategories);
+
+      // Extract all subcategories for dropdown
+      const allSubcategories: any[] = [];
+      mainCategories.forEach((cat: any) => {
+        if (cat.children?.length > 0) {
+          cat.children.forEach((subcat: any) => {
+            allSubcategories.push({
+              id: subcat.id,
+              name: subcat.name,
+              parent_id: subcat.parent_id,
+              parent_name: cat.name
+            });
+          });
+        }
       });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        toast.success(data.message);
-        setSelectedProducts([]);
-      } else {
-        toast.error(data.error || 'Sync failed');
-      }
+      setSubcategories(allSubcategories);
     } catch (error) {
-      toast.error('Sync failed');
-    } finally {
-      setSyncing(false);
+      console.error('Failed to fetch categories:', error);
+      // Fallback to default list if fetch fails
+      setCategories([{ id: '1', name: 'Skincare', is_subcategory: false, children: [] }]);
+      setSubcategories([]);
     }
   };
 
-  const distributeToStore = async () => {
-    if (!selectedStore || selectedProducts.length === 0) {
-      toast.error('Please select a store and products');
+  const handleAddManufacturer = async () => {
+    if (!newManufacturerName.trim()) {
+      toast.error('Please enter a manufacturer name');
       return;
     }
 
-    setDistributing(true);
     try {
-      const response = await fetch('/api/admin/distribute-products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productIds: selectedProducts,
-          storeId: selectedStore,
-          pricing: { markup: 20 }, // 20% markup for stores
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        toast.success(`Distributed to store successfully!`);
-        setSelectedProducts([]);
-        setSelectedStore('');
-      } else {
-        toast.error(data.error || 'Distribution failed');
-      }
-    } catch (error) {
-      toast.error('Distribution failed');
+      setAddingManufacturer(true);
+      await apiClient.createManufacturer(newManufacturerName.trim());
+      toast.success('Manufacturer added successfully');
+      setShowManufacturerModal(false);
+      setNewManufacturerName('');
+      await fetchManufacturers();
+    } catch (error: any) {
+      console.error('Failed to add manufacturer:', error);
+      toast.error(error.message || 'Failed to add manufacturer');
     } finally {
-      setDistributing(false);
+      setAddingManufacturer(false);
     }
   };
 
-  const toggleProduct = (id: string) => {
-    setSelectedProducts(prev =>
-      prev.includes(id)
-        ? prev.filter(p => p !== id)
-        : [...prev, id]
-    );
-  };
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) {
+      toast.error('Please enter a category name');
+      return;
+    }
 
-  const selectAll = () => {
-    if (selectedProducts.length === products.length) {
-      setSelectedProducts([]);
-    } else {
-      setSelectedProducts(products.map(p => p.id));
+    try {
+      setAddingCategory(true);
+      const categoryData: any = { name: newCategoryName.trim() };
+      if (newCategoryParentId) {
+        categoryData.parent_id = newCategoryParentId;
+      }
+      await apiClient.createCategory(categoryData);
+      toast.success('Category added successfully');
+      setNewCategoryName('');
+      setNewCategoryParentId('');
+      setShowCategoryModal(false);
+      fetchCategories();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to add category');
+    } finally {
+      setAddingCategory(false);
     }
   };
+
+  // Populate form when editingProduct changes
+  useEffect(() => {
+    if (editingProduct) {
+      const productCategories = Array.isArray(editingProduct.categories) ? editingProduct.categories : [];
+      const mainCategories = productCategories.filter((c: any) => !c.parent_id || !c.is_subcategory);
+      const subCategories = productCategories.filter((c: any) => c.parent_id && c.is_subcategory);
+      
+      setSelectedCategoryTags(mainCategories);
+      setSelectedSubcategoryTags(subCategories);
+      
+      setFormData({
+        name: editingProduct.name || '',
+        description: editingProduct.description || '',
+        price: editingProduct.price ? editingProduct.price.toString() : '',
+        mrp: editingProduct.mrp ? editingProduct.mrp.toString() : '',
+        category: editingProduct.category || '',
+        categories: mainCategories.map((c: any) => c.id),
+        subcategories: subCategories.map((c: any) => c.id),
+        manufacturer: editingProduct.manufacturer || '',
+        brand: editingProduct.brand || '',
+        stock: editingProduct.stock ? editingProduct.stock.toString() : '',
+        origin: editingProduct.origin || 'South Korea',
+        images: editingProduct.images || [],
+      });
+    }
+  }, [editingProduct]);
+
+  const fetchProducts = async () => {
+    try {
+      const response: any = await apiClient.getProducts({ limit: 100 });
+      setProducts(response.products || []);
+    } catch (error) {
+      console.error('Failed to fetch products:', error);
+      toast.error('Failed to load products');
+    }
+  };
+
+  const getImageUrl = (img: string) => {
+    if (!img) return '';
+    if (img.startsWith('http')) return img;
+    return `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}${img}`;
+  };
+
+  const isProductInWarehouse = (product: Product) => {
+    return product.is_warehouse_product === true;
+  };
+
 
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.price || !formData.category) {
+    if (!formData.name || formData.categories.length === 0) {
       toast.error('Please fill in all required fields');
       return;
     }
 
-    const newProduct: Product = {
-      id: `manual_${Date.now()}`,
-      name: formData.name,
-      description: formData.description,
-      price: parseFloat(formData.price),
-      mrp: formData.mrp ? parseFloat(formData.mrp) : undefined,
-      category: formData.category,
-      manufacturer: formData.manufacturer,
-      brand: formData.brand,
-      images: formData.images,
-      stock: parseInt(formData.stock) || 0,
-      origin: formData.origin,
-      source: 'manual',
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      // Build product data for API
+      const productData: any = {
+        name: formData.name,
+        description: formData.description,
+        price: formData.price ? parseFloat(formData.price) : 0,
+        mrp: formData.mrp ? parseFloat(formData.mrp) : undefined,
+        manufacturer: formData.manufacturer,
+        brand: formData.brand,
+        images: formData.images,
+        stock_quantity: parseInt(formData.stock) || 0,
+        origin: formData.origin,
+      };
 
-    setProducts(prev => [newProduct, ...prev]);
-    toast.success('Product added successfully!');
-    setShowAddForm(false);
-    setFormData({
-      name: '',
-      description: '',
-      price: '',
-      mrp: '',
-      category: '',
-      manufacturer: '',
-      brand: '',
-      stock: '',
-      origin: 'South Korea',
-      images: [],
-    });
+      // Use selected categories and subcategories from tags
+      if (formData.categories && formData.categories.length > 0) {
+        productData.categories = formData.categories;
+        // Set legacy category field for backward compatibility
+        productData.category = formData.categories[0];
+      }
+      if (formData.subcategories && formData.subcategories.length > 0) {
+        productData.subcategories = formData.subcategories;
+      }
+
+      if (editingProduct) {
+        // Update existing product
+        const response: any = await apiClient.updateProduct(editingProduct.id, productData);
+        setProducts(prev => prev.map(p => p.id === editingProduct.id ? { ...p, ...response.product } : p));
+        toast.success('Product updated successfully!');
+      } else {
+        // Create new product
+        const response: any = await apiClient.createProduct(productData);
+        const savedProduct: Product = {
+          ...response.product,
+          source: 'manual',
+        };
+        setProducts(prev => [savedProduct, ...prev]);
+        toast.success('Product added successfully!');
+      }
+      
+      setShowAddForm(false);
+      setEditingProduct(null);
+      setSelectedCategoryTags([]);
+      setSelectedSubcategoryTags([]);
+      setFormData({
+        name: '',
+        description: '',
+        price: '',
+        mrp: '',
+        category: '',
+        categories: [] as string[],
+        subcategories: [] as string[],
+        manufacturer: '',
+        brand: '',
+        stock: '',
+        origin: 'South Korea',
+        images: [] as string[],
+      });
+    } catch (error: any) {
+      console.error('Failed to save product:', error);
+      toast.error(error.message || 'Failed to save product to database');
+    }
   };
 
   const handleDeleteProduct = (productId: string) => {
@@ -240,78 +396,148 @@ export default function ProductCatalogPage() {
     toast.success('Product deleted');
   };
 
+  // Add to Warehouse handlers
+  const openWarehouseModal = (product: Product) => {
+    setWarehouseProduct(product);
+    // Pre-fill with product data if available
+    setWarehouseFormData({
+      warehouse_stock: 100,
+      b2c_retail_price: product.price ? (product.price * 1.2).toFixed(2) : '', // 20% markup default
+      b2b_wholesale_price: product.price ? (product.price * 0.8).toFixed(2) : '', // 20% discount default
+      b2b_moq: 10,
+      customer_type: 'BOTH',
+    });
+    setWarehouseModalOpen(true);
+  };
+
+  const handleAddToWarehouse = async () => {
+    if (!warehouseProduct) return;
+    
+    try {
+      setAddingToWarehouse(true);
+      const data = {
+        product_id: warehouseProduct.id,
+        name: warehouseProduct.name,
+        description: warehouseProduct.description,
+        category: warehouseProduct.category,
+        brand: warehouseProduct.brand || warehouseProduct.manufacturer,
+        customer_type: warehouseFormData.customer_type,
+        warehouse_stock: warehouseFormData.warehouse_stock,
+        b2c_retail_price: warehouseFormData.b2c_retail_price ? parseFloat(warehouseFormData.b2c_retail_price) : null,
+        b2b_wholesale_price: warehouseFormData.b2b_wholesale_price ? parseFloat(warehouseFormData.b2b_wholesale_price) : null,
+        b2b_moq: warehouseFormData.b2b_moq,
+        images: warehouseProduct.images,
+      };
+      
+      await apiClient.createWarehouseProduct(data);
+      toast.success(`${warehouseProduct.name} added to warehouse`);
+      setWarehouseModalOpen(false);
+      setWarehouseProduct(null);
+    } catch (error: any) {
+      console.error('Failed to add to warehouse:', error);
+      if (error.message?.includes('already in warehouse')) {
+        toast.error('This product is already in the warehouse');
+      } else {
+        toast.error(error.message || 'Failed to add product to warehouse');
+      }
+    } finally {
+      setAddingToWarehouse(false);
+    }
+  };
+
+  // Image upload handlers
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    // Check total would exceed 5
+    if (formData.images.length + files.length > 5) {
+      toast.error(`You can only upload up to 5 images. You currently have ${formData.images.length}.`);
+      return;
+    }
+    
+    setUploadingImages(true);
+    
+    try {
+      const uploadPromises = Array.from(files).map(file => 
+        apiClient.uploadProductImage(file)
+      );
+      
+      const results = await Promise.all(uploadPromises);
+      // Construct full URLs for image previews
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+      const newUrls = results.map(r => `${backendUrl}${r.url}`);
+      
+      setFormData(prev => ({
+        ...prev,
+        images: [...prev.images, ...newUrls]
+      }));
+      
+      toast.success(`${files.length} image(s) uploaded successfully`);
+    } catch (error: any) {
+      console.error('Image upload failed:', error);
+      toast.error(error.message || 'Failed to upload image(s)');
+    } finally {
+      setUploadingImages(false);
+      // Reset input so same file can be selected again if needed
+      e.target.value = '';
+    }
+  };
+
+  const removeImage = (idx: number) => {
+    setFormData(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== idx)
+    }));
+  };
+
   const filteredProducts = products.filter(p => {
-    if (sourceFilter === 'all') return true;
-    return p.source === sourceFilter;
+    if (manufacturer && p.manufacturer !== manufacturer) return false;
+    if (category && p.category !== category) return false;
+    return true;
   });
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Product Catalog</h1>
           <p className="text-slate-500 mt-1">
-            Manage products from CRM or add manually for stores
+            Manage your product catalog
           </p>
         </div>
-      <div className="flex gap-3">
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl font-medium hover:bg-slate-800 transition-all"
-          >
-            <Plus size={18} />
-            Add Product
-          </button>
-          <button
-            onClick={fetchCRMProducts}
-            disabled={loading}
-            className="flex items-center gap-2 bg-white border-2 border-slate-200 text-slate-700 px-4 py-2 rounded-xl font-medium hover:border-slate-300 transition-all disabled:opacity-50"
-          >
-            {loading ? (
-              <RefreshCw size={18} className="animate-spin" />
-            ) : (
-              <Download size={18} />
-            )}
-            Fetch from CRM
-          </button>
-        </div>
+        <button
+          onClick={() => setShowAddForm(true)}
+          className="flex items-center justify-center gap-2 bg-slate-900 text-white px-6 py-2.5 rounded-xl font-medium hover:bg-slate-800 transition-all"
+        >
+          <Plus size={18} />
+          Add Product
+        </button>
       </div>
 
-      {/* Source Filter Tabs */}
-      <div className="flex gap-2">
-        {(['all', 'crm', 'manual'] as const).map((source) => (
-          <button
-            key={source}
-            onClick={() => setSourceFilter(source)}
-            className={`px-4 py-2 rounded-lg font-medium capitalize transition-colors ${
-              sourceFilter === source
-                ? 'bg-slate-900 text-white'
-                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            {source === 'all' ? 'All Products' : `${source} Products`}
-            <span className="ml-2 text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">
-              {source === 'all' ? products.length : products.filter(p => p.source === source).length}
-            </span>
-          </button>
-        ))}
-      </div>
+      {/* Add/Edit Product Form Modal */}
+      {(showAddForm || editingProduct) && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-900">
+                  {editingProduct ? 'Edit Product' : 'Add New Product'}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowAddForm(false);
+                    setEditingProduct(null);
+                  }}
+                  className="p-2 hover:bg-slate-100 rounded-lg"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
 
-      {/* Add Product Form Modal */}
-      {showAddForm && (
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-slate-900">Add New Product</h2>
-            <button
-              onClick={() => setShowAddForm(false)}
-              className="p-2 hover:bg-slate-100 rounded-lg"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          <form onSubmit={handleAddProduct} className="grid sm:grid-cols-2 gap-4">
+            <form onSubmit={handleAddProduct} className="p-6 grid sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Product Name *
@@ -341,7 +567,7 @@ export default function ProductCatalogPage() {
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Price (USD) *
+                Price (USD) <span className="text-slate-400 font-normal">(Optional)</span>
               </label>
               <input
                 type="number"
@@ -350,7 +576,6 @@ export default function ProductCatalogPage() {
                 onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                 className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
                 placeholder="29.99"
-                required
               />
             </div>
 
@@ -370,35 +595,140 @@ export default function ProductCatalogPage() {
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Category *
+                Main Categories *
               </label>
-              <select
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                required
-              >
-                <option value="">Select category</option>
-                {categories.map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+              <div className="flex gap-2 mb-2">
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const selectedCategory = categories.find(c => c.id === e.target.value);
+                    if (selectedCategory) addCategoryTag(selectedCategory);
+                  }}
+                  className="flex-1 px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                >
+                  <option value="">Select main category to add</option>
+                  {categories?.filter(c => !c.parent_id).map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewCategoryParentId('');
+                    setShowCategoryModal(true);
+                  }}
+                  className="px-3 py-2 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition-colors flex items-center gap-1"
+                  title="Add new main category"
+                >
+                  <Plus size={16} />
+                  Add Category
+                </button>
+              </div>
+              {selectedCategoryTags?.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedCategoryTags.map((cat: any) => (
+                    <span
+                      key={cat.id}
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-sm"
+                    >
+                      {cat.name}
+                      <button
+                        type="button"
+                        onClick={() => removeCategoryTag(cat.id)}
+                        className="hover:text-red-600"
+                      >
+                        <X size={14} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Subcategories (Optional)
+              </label>
+              <div className="flex gap-2 mb-2">
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const selectedSubcategory = (subcategories || []).find(s => s.id === e.target.value);
+                    if (selectedSubcategory) addSubcategoryTag(selectedSubcategory);
+                  }}
+                  className="flex-1 px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  disabled={!selectedCategoryTags || selectedCategoryTags.length === 0}
+                >
+                  <option value="">Select subcategory to add</option>
+                  {subcategories?.filter(s => selectedCategoryTags?.some((c: any) => c.id === s.parent_id)).map(sub => (
+                      <option key={sub.id} value={sub.id}>
+                        {sub.parent_name} &gt; {sub.name}
+                      </option>
+                    ))}
+                </select>
+                {selectedCategoryTags?.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewCategoryParentId(selectedCategoryTags[0].id);
+                      setShowCategoryModal(true);
+                    }}
+                    className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-1"
+                    title="Add subcategory to selected category"
+                  >
+                    <Plus size={16} />
+                    Add Subcategory
+                  </button>
+                )}
+              </div>
+              {selectedSubcategoryTags?.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedSubcategoryTags.map((sub: any) => (
+                    <span
+                      key={sub.id}
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm"
+                    >
+                      {sub.parent_name} &gt; {sub.name}
+                      <button
+                        type="button"
+                        onClick={() => removeSubcategoryTag(sub.id)}
+                        className="hover:text-red-600"
+                      >
+                        <X size={14} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {selectedCategoryTags?.length === 0 && (
+                <p className="text-xs text-slate-400 mt-1">Select main categories first to see subcategories</p>
+              )}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Manufacturer/Brand
               </label>
-              <select
-                value={formData.manufacturer}
-                onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value, brand: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-              >
-                <option value="">Select manufacturer</option>
-                {manufacturers.map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  value={formData.manufacturer}
+                  onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value, brand: e.target.value })}
+                  className="flex-1 px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                >
+                  <option value="">Select manufacturer</option>
+                  {manufacturers.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowManufacturerModal(true)}
+                  className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-1"
+                  title="Add new manufacturer"
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
             </div>
 
             <div>
@@ -429,18 +759,18 @@ export default function ProductCatalogPage() {
 
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Product Images
+                Product Images <span className="text-slate-400 font-normal">(Max 5)</span>
               </label>
               
               {/* Image Previews */}
-              {formData.images.length > 0 && (
+              {formData.images?.length > 0 && (
                 <div className="flex flex-wrap gap-3 mb-4">
                   {formData.images.map((img, idx) => (
                     <div key={idx} className="relative w-24 h-24 rounded-lg overflow-hidden border border-slate-200 group">
                       <img src={img} alt={`Product ${idx + 1}`} className="w-full h-full object-cover" />
                       <button
                         type="button"
-                        onClick={() => setFormData(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }))}
+                        onClick={() => removeImage(idx)}
                         className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         <X size={14} />
@@ -450,36 +780,52 @@ export default function ProductCatalogPage() {
                 </div>
               )}
               
-              {/* Add Image Input */}
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  id="imageInput"
-                  placeholder="Enter image URL"
-                  className="flex-1 px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    const input = document.getElementById('imageInput') as HTMLInputElement;
-                    const value = input?.value.trim();
-                    if (value) {
-                      setFormData(prev => ({ ...prev, images: [...prev.images, value] }));
-                      input.value = '';
-                    }
-                  }}
-                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium transition-colors"
-                >
-                  Add Image
-                </button>
-              </div>
-              <p className="text-xs text-slate-500 mt-1">Enter a direct image URL (e.g., https://example.com/image.jpg)</p>
+              {/* File Upload Input */}
+              {formData.images.length < 5 && (
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple={formData.images.length < 4}
+                    onChange={handleImageUpload}
+                    className="hidden"
+                    id="imageUpload"
+                    disabled={uploadingImages}
+                  />
+                  <label
+                    htmlFor="imageUpload"
+                    className={`flex items-center justify-center gap-2 w-full px-4 py-3 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-slate-400 hover:bg-slate-50 transition-colors ${uploadingImages ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {uploadingImages ? (
+                      <>
+                        <RefreshCw size={18} className="animate-spin" />
+                        <span className="text-slate-600">Uploading...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={18} />
+                        <span className="text-slate-600">Click to upload images</span>
+                        <span className="text-slate-400 text-sm">({formData.images.length}/5)</span>
+                      </>
+                    )}
+                  </label>
+                </div>
+              )}
+              
+              <p className="text-xs text-slate-500 mt-2">
+                Supported: PNG, JPG, JPEG, GIF, WebP. Max 5 images, 16MB each.
+              </p>
             </div>
 
             <div className="sm:col-span-2 flex gap-3 pt-4">
               <button
                 type="button"
-                onClick={() => setShowAddForm(false)}
+                onClick={() => {
+                  setShowAddForm(false);
+                  setEditingProduct(null);
+                  setSelectedCategoryTags([]);
+                  setSelectedSubcategoryTags([]);
+                }}
                 className="px-6 py-2 border-2 border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 font-medium"
               >
                 Cancel
@@ -489,11 +835,12 @@ export default function ProductCatalogPage() {
                 className="flex items-center gap-2 px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium"
               >
                 <Save size={18} />
-                Save Product
+                {editingProduct ? 'Update Product' : 'Save Product'}
               </button>
             </div>
           </form>
         </div>
+      </div>
       )}
 
       {/* Filters */}
@@ -507,7 +854,7 @@ export default function ProductCatalogPage() {
               className="border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-900"
             >
               <option value="">All Manufacturers</option>
-              {manufacturers.map(m => (
+              {manufacturers?.map(m => (
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>
@@ -521,81 +868,25 @@ export default function ProductCatalogPage() {
               className="border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-900"
             >
               <option value="">All Categories</option>
-              {categories.map(c => (
-                <option key={c} value={c}>{c}</option>
+              {categories?.map(c => (
+                <option key={c.id} value={c.name}>{c.name}</option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={() => setShowCategoryModal(true)}
+              className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-1"
+              title="Add new category"
+            >
+              <Plus size={16} />
+            </button>
           </div>
-
-          <button
-            onClick={fetchCRMProducts}
-            className="bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors"
-          >
-            Apply Filters
-          </button>
         </div>
       </div>
-
-      {/* Actions Bar */}
-      {selectedProducts.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <CheckCircle2 className="text-blue-600" size={20} />
-            <span className="text-blue-900 font-medium">
-              {selectedProducts.length} products selected
-            </span>
-          </div>
-          <div className="flex gap-3">
-            <select
-              value={selectedStore}
-              onChange={(e) => setSelectedStore(e.target.value)}
-              className="border border-slate-200 rounded-lg px-3 py-2 bg-white"
-            >
-              <option value="">Select Store...</option>
-              {stores.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-            <button
-              onClick={distributeToStore}
-              disabled={distributing || !selectedStore}
-              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            >
-              {distributing ? (
-                <RefreshCw size={18} className="animate-spin" />
-              ) : (
-                <Send size={18} />
-              )}
-              Distribute
-            </button>
-            <button
-              onClick={syncProducts}
-              disabled={syncing}
-              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
-            >
-              {syncing ? (
-                <RefreshCw size={18} className="animate-spin" />
-              ) : (
-                <Package size={18} />
-              )}
-              Import to Catalog
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Products Grid */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
-              onChange={selectAll}
-              className="w-4 h-4 text-slate-900 rounded border-slate-300"
-            />
-            <span className="font-medium text-slate-700">Select All</span>
-          </div>
           <span className="text-sm text-slate-500">
             {filteredProducts.length} products found
           </span>
@@ -606,40 +897,27 @@ export default function ProductCatalogPage() {
             <Package className="w-16 h-16 text-slate-200 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-slate-900 mb-2">No products yet</h3>
             <p className="text-slate-500 mb-4">
-              Add products manually or import from CRM
+              Add products to get started
             </p>
-            <div className="flex gap-3 justify-center">
-              <button
-                onClick={() => setShowAddForm(true)}
-                className="bg-slate-900 text-white px-6 py-3 rounded-xl hover:bg-slate-800 transition-colors flex items-center gap-2"
-              >
-                <Plus size={18} />
-                Add Product
-              </button>
-              <button
-                onClick={fetchCRMProducts}
-                className="bg-white border-2 border-slate-200 text-slate-700 px-6 py-3 rounded-xl hover:border-slate-300 transition-colors flex items-center gap-2"
-              >
-                <Download size={18} />
-                Fetch from CRM
-              </button>
-            </div>
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="bg-slate-900 text-white px-6 py-3 rounded-xl hover:bg-slate-800 transition-colors flex items-center gap-2"
+            >
+              <Plus size={18} />
+              Add Product
+            </button>
           </div>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
             {filteredProducts.map((product) => (
               <div
                 key={product.id}
-                className={`border rounded-xl overflow-hidden transition-all ${
-                  selectedProducts.includes(product.id)
-                    ? 'border-slate-900 ring-2 ring-slate-900/10'
-                    : 'border-slate-200 hover:border-slate-300'
-                }`}
+                className="border border-slate-200 rounded-xl overflow-hidden transition-all hover:border-slate-300 hover:shadow-md"
               >
                 <div className="relative aspect-square bg-slate-100">
                   {product.images[0] ? (
                     <Image
-                      src={product.images[0]}
+                      src={getImageUrl(product.images[0])}
                       alt={product.name}
                       fill
                       className="object-cover"
@@ -649,22 +927,7 @@ export default function ProductCatalogPage() {
                       <Package className="text-slate-300" size={48} />
                     </div>
                   )}
-                  <div className="absolute top-2 left-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedProducts.includes(product.id)}
-                      onChange={() => toggleProduct(product.id)}
-                      className="w-5 h-5 text-slate-900 rounded border-slate-300"
-                    />
-                  </div>
-                  <div className="absolute top-2 right-2 flex gap-1">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      product.source === 'crm' 
-                        ? 'bg-blue-100 text-blue-700' 
-                        : 'bg-green-100 text-green-700'
-                    }`}>
-                      {product.source === 'crm' ? 'CRM' : 'Manual'}
-                    </span>
+                  <div className="absolute top-2 right-2">
                     <span className="bg-white/90 backdrop-blur px-2 py-1 rounded text-xs font-medium">
                       {product.origin}
                     </span>
@@ -700,33 +963,320 @@ export default function ProductCatalogPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mt-3">
-                    <span className="text-xs bg-slate-100 px-2 py-1 rounded">{product.category}</span>
+                    {product.category && product.categories?.length > 0 ? (
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {product.categories.map((cat: any) => (
+                          <span key={cat.id} className="text-xs bg-slate-100 px-2 py-1 rounded">
+                            {cat.parent_name ? `${cat.parent_name} &gt; ${cat.name}` : cat.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-xs bg-slate-100 px-2 py-1 rounded">{product.category}</span>
+                    )}
                     <span className="text-xs bg-slate-100 px-2 py-1 rounded">{product.brand}</span>
                   </div>
-                  {product.source === 'manual' && (
-                    <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100">
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 flex-wrap">
+                    {!isProductInWarehouse(product) ? (
                       <button
-                        onClick={() => setEditingProduct(product)}
-                        className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
+                        onClick={() => openWarehouseModal(product)}
+                        className="flex items-center gap-1 text-sm text-emerald-600 hover:text-emerald-700"
                       >
-                        <Edit2 size={14} />
-                        Edit
+                        <Warehouse size={14} />
+                        Add to Warehouse
                       </button>
-                      <button
-                        onClick={() => handleDeleteProduct(product.id)}
-                        className="flex items-center gap-1 text-sm text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 size={14} />
-                        Delete
-                      </button>
-                    </div>
-                  )}
+                    ) : (
+                      <span className="flex items-center gap-1 text-sm text-slate-500">
+                        <Warehouse size={14} />
+                        In Warehouse
+                      </span>
+                    )}
+                    <button
+                      onClick={() => setEditingProduct(product)}
+                      className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
+                    >
+                      <Edit2 size={14} />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteProduct(product.id)}
+                      className="flex items-center gap-1 text-sm text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 size={14} />
+                      Delete
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Add to Warehouse Modal */}
+      {warehouseModalOpen && warehouseProduct && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-900">Add to Warehouse</h2>
+                <button
+                  onClick={() => setWarehouseModalOpen(false)}
+                  className="p-2 hover:bg-slate-100 rounded-lg"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <p className="text-sm text-slate-500 mt-1">
+                Configure warehouse inventory settings for <span className="font-medium text-slate-700">{warehouseProduct.name}</span>
+              </p>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Initial Stock *
+                  </label>
+                  <input
+                    type="number"
+                    value={warehouseFormData.warehouse_stock}
+                    onChange={(e) => setWarehouseFormData(prev => ({ ...prev, warehouse_stock: parseInt(e.target.value) || 0 }))}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Customer Type *
+                  </label>
+                  <select
+                    value={warehouseFormData.customer_type}
+                    onChange={(e) => setWarehouseFormData(prev => ({ ...prev, customer_type: e.target.value as 'B2C' | 'B2B' | 'BOTH' }))}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="BOTH">Both (B2C & B2B)</option>
+                    <option value="B2C">B2C Only</option>
+                    <option value="B2B">B2B Only</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    B2C Retail Price ($)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={warehouseFormData.b2c_retail_price}
+                    onChange={(e) => setWarehouseFormData(prev => ({ ...prev, b2c_retail_price: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="29.99"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">Price for B2C stores (resellers)</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    B2B Wholesale Price ($)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={warehouseFormData.b2b_wholesale_price}
+                    onChange={(e) => setWarehouseFormData(prev => ({ ...prev, b2b_wholesale_price: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="19.99"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">Price for B2B stores (wholesalers)</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  B2B Minimum Order Quantity (MOQ)
+                </label>
+                <input
+                  type="number"
+                  value={warehouseFormData.b2b_moq}
+                  onChange={(e) => setWarehouseFormData(prev => ({ ...prev, b2b_moq: parseInt(e.target.value) || 1 }))}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  min="1"
+                />
+                <p className="text-xs text-slate-400 mt-1">Minimum units B2B customers must order</p>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-slate-200 flex gap-3">
+              <button
+                onClick={() => setWarehouseModalOpen(false)}
+                className="flex-1 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddToWarehouse}
+                disabled={addingToWarehouse || warehouseFormData.warehouse_stock <= 0}
+                className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {addingToWarehouse ? (
+                  <RefreshCw size={18} className="animate-spin" />
+                ) : (
+                  <Warehouse size={18} />
+                )}
+                {addingToWarehouse ? 'Adding...' : 'Add to Warehouse'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Manufacturer Modal */}
+      {showManufacturerModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full">
+            <div className="p-6 border-b border-slate-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-900">Add New Manufacturer</h2>
+                <button
+                  onClick={() => {
+                    setShowManufacturerModal(false);
+                    setNewManufacturerName('');
+                  }}
+                  className="p-2 hover:bg-slate-100 rounded-lg"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Manufacturer Name *
+              </label>
+              <input
+                type="text"
+                value={newManufacturerName}
+                onChange={(e) => setNewManufacturerName(e.target.value)}
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                placeholder="e.g., COSRX"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddManufacturer();
+                  }
+                }}
+              />
+            </div>
+
+            <div className="p-6 border-t border-slate-200 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowManufacturerModal(false);
+                  setNewManufacturerName('');
+                }}
+                className="flex-1 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddManufacturer}
+                disabled={addingManufacturer || !newManufacturerName.trim()}
+                className="flex-1 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {addingManufacturer ? (
+                  <RefreshCw size={18} className="animate-spin" />
+                ) : (
+                  <Plus size={18} />
+                )}
+                {addingManufacturer ? 'Adding...' : 'Add Manufacturer'}
+              </button>
+            </div>
+          </div>
+        </div>
+  )}
+
+{/* Add Category Modal */}
+{showCategoryModal && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-xl max-w-md w-full">
+      <div className="p-6 border-b border-slate-200">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-900">Add New Category</h2>
+          <button
+            onClick={() => {
+              setShowCategoryModal(false);
+              setNewCategoryName('');
+              setNewCategoryParentId('');
+            }}
+            className="p-2 hover:bg-slate-100 rounded-lg"
+          >
+            <X size={20} />
+          </button>
+        </div>
+      </div>
+
+      <div className="p-6">
+        <label className="block text-sm font-medium text-slate-700 mb-2">
+          Category Name *
+        </label>
+        <input
+          type="text"
+          value={newCategoryName}
+          onChange={(e) => setNewCategoryName(e.target.value)}
+          className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 mb-4"
+          placeholder="e.g., Skincare"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && newCategoryName.trim()) {
+              handleAddCategory();
+            }
+          }}
+        />
+        
+        <label className="block text-sm font-medium text-slate-700 mb-2">
+          Parent Category (Optional - leave empty for main category)
+        </label>
+        <select
+          value={newCategoryParentId}
+          onChange={(e) => setNewCategoryParentId(e.target.value)}
+          className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+        >
+          <option value="">No parent (Main Category)</option>
+          {categories?.filter(c => !c.parent_id).map(c => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="p-6 border-t border-slate-200 flex gap-3">
+        <button
+          onClick={() => {
+            setShowCategoryModal(false);
+            setNewCategoryName('');
+            setNewCategoryParentId('');
+          }}
+          className="flex-1 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 font-medium"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleAddCategory}
+          disabled={addingCategory || !newCategoryName.trim()}
+          className="flex-1 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          {addingCategory ? (
+            <RefreshCw size={18} className="animate-spin" />
+          ) : (
+            <Plus size={18} />
+          )}
+          {addingCategory ? 'Adding...' : 'Add Category'}
+        </button>
+      </div>
     </div>
-  );
+  </div>
+)}
+
+</div>
+);
 }

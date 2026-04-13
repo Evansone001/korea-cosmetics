@@ -1,7 +1,8 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import PageTitle from "@/components/PageTitle";
-import { Package, Truck, CheckCircle, Clock, XCircle, X, MapPin, CreditCard, User, ExternalLink, AlertCircle } from 'lucide-react'
+import { Package, Truck, CheckCircle, Clock, XCircle, X, MapPin, CreditCard, User, ExternalLink, AlertCircle } from 'lucide-react';
+import { apiClient } from '@/lib/api-client';
 
 interface TrackingEvent {
     date: string
@@ -44,90 +45,33 @@ interface Order {
 }
 
 export default function Orders() {
-    const [selectedOrder, setSelectedOrder] = useState<typeof orders[0] | null>(null)
+    const [selectedOrder, setSelectedOrder] = useState<any>(null)
     const [showTrackingModal, setShowTrackingModal] = useState(false)
-    const [trackingOrder, setTrackingOrder] = useState<typeof orders[0] | null>(null)
+    const [trackingOrder, setTrackingOrder] = useState<any>(null)
     const [showCancelModal, setShowCancelModal] = useState(false)
-    const [cancelOrder, setCancelOrder] = useState<typeof orders[0] | null>(null)
+    const [cancelOrder, setCancelOrder] = useState<any>(null)
     const [cancelReason, setCancelReason] = useState('')
     const [cancelError, setCancelError] = useState('')
+    const [orders, setOrders] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
 
-    // Sample order data
-    const orders = [
-        {
-            id: 'ORD-001',
-            date: '2026-01-15',
-            status: 'delivered',
-            total: 2599,
-            subtotal: 2599,
-            shipping: 0,
-            tax: 0,
-            paymentMethod: 'COD',
-            shippingAddress: {
-                name: 'John Doe',
-                street: '123 Main Street',
-                city: 'Nairobi',
-                state: 'Nairobi County',
-                zip: '00100',
-                country: 'Kenya',
-                phone: '+254 712 345 678'
-            },
-            trackingNumber: 'TRK123456789',
-            estimatedDelivery: '2026-01-18',
-            items: [
-                { name: 'Korean Snail Mucin Essence', quantity: 2, price: 1299, image: '/product1.jpg' },
-                { name: 'Vitamin C Brightening Serum', quantity: 1, price: 650, image: '/product2.jpg' }
-            ]
-        },
-        {
-            id: 'ORD-002',
-            date: '2026-01-20',
-            status: 'processing',
-            total: 3499,
-            subtotal: 3499,
-            shipping: 0,
-            tax: 0,
-            paymentMethod: 'Stripe',
-            shippingAddress: {
-                name: 'John Doe',
-                street: '123 Main Street',
-                city: 'Nairobi',
-                state: 'Nairobi County',
-                zip: '00100',
-                country: 'Kenya',
-                phone: '+254 712 345 678'
-            },
-            trackingNumber: 'TRK123456790',
-            estimatedDelivery: '2026-01-25',
-            items: [
-                { name: 'Hyaluronic Acid Moisturizer', quantity: 1, price: 3499, image: '/product3.jpg' }
-            ]
-        },
-        {
-            id: 'ORD-003',
-            date: '2026-01-25',
-            status: 'shipped',
-            total: 1899,
-            subtotal: 1899,
-            shipping: 0,
-            tax: 0,
-            paymentMethod: 'COD',
-            shippingAddress: {
-                name: 'John Doe',
-                street: '123 Main Street',
-                city: 'Nairobi',
-                state: 'Nairobi County',
-                zip: '00100',
-                country: 'Kenya',
-                phone: '+254 712 345 678'
-            },
-            trackingNumber: 'TRK123456791',
-            estimatedDelivery: '2026-01-28',
-            items: [
-                { name: 'K-Beauty Face Mask Set', quantity: 1, price: 1899, image: '/product4.jpg' }
-            ]
+    // Fetch orders from backend
+    useEffect(() => {
+        const fetchOrders = async () => {
+            try {
+                setLoading(true)
+                const response = await apiClient.getMyOrders()
+                setOrders(response.orders || [])
+            } catch (err) {
+                console.error('Failed to fetch orders:', err)
+                setError('Failed to load orders')
+            } finally {
+                setLoading(false)
+            }
         }
-    ]
+        fetchOrders()
+    }, [])
 
     const getStatusIcon = (status: Order['status']) => {
         switch (status) {
@@ -161,23 +105,55 @@ export default function Orders() {
 
     const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || '$'
 
-    const handleCancelOrder = () => {
+    const handleCancelOrder = async () => {
         if (!cancelReason) {
             setCancelError('Please select a reason for cancellation')
             return
         }
         
-        // In real app, this would call an API
-        console.log(`Cancelling order ${cancelOrder?.id} with reason: ${cancelReason}`)
-        
-        // Close modal and reset
-        setShowCancelModal(false)
-        setCancelOrder(null)
-        setCancelReason('')
-        setCancelError('')
-        
-        // Show success message (in real app, would use toast)
-        alert('Order cancelled successfully. Refund will be processed within 5-7 business days.')
+        try {
+            // Call API to cancel order
+            await apiClient.updateOrderStatus(cancelOrder.id, 'cancelled')
+            
+            // Refresh orders
+            const response = await apiClient.getMyOrders()
+            setOrders(response.orders || [])
+            
+            // Close modal and reset
+            setShowCancelModal(false)
+            setCancelOrder(null)
+            setCancelReason('')
+            setCancelError('')
+            
+            alert('Order cancelled successfully. Refund will be processed within 5-7 business days.')
+        } catch (err) {
+            console.error('Failed to cancel order:', err)
+            alert('Failed to cancel order. Please try again.')
+        }
+    }
+
+    if (loading) {
+        return (
+            <div className="min-h-[80vh] mx-6 flex items-center justify-center text-slate-400">
+                <div className="w-8 h-8 border-2 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
+            </div>
+        )
+    }
+
+    if (error) {
+        return (
+            <div className="min-h-[80vh] mx-6 flex items-center justify-center text-slate-400">
+                <div className="text-center">
+                    <p className="text-red-600 mb-4">{error}</p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="bg-slate-700 text-white px-4 py-2 rounded-lg hover:bg-slate-900"
+                    >
+                        Retry
+                    </button>
+                </div>
+            </div>
+        )
     }
 
     return (
@@ -219,7 +195,7 @@ export default function Orders() {
                                 <div className="border-t border-slate-200 pt-4">
                                     <h4 className="font-medium text-slate-900 mb-3">Order Items</h4>
                                     <div className="space-y-2">
-                                        {order.items.map((item, index) => (
+                                        {order.items.map((item: any, index: number) => (
                                             <div key={index} className="flex justify-between items-center py-2">
                                                 <div>
                                                     <p className="font-medium text-slate-800">{item.name}</p>
@@ -310,7 +286,7 @@ export default function Orders() {
                             <div className="border border-slate-200 rounded-lg p-4">
                                 <h4 className="font-medium text-slate-900 mb-4">Order Items</h4>
                                 <div className="space-y-4">
-                                    {selectedOrder.items.map((item, index) => (
+                                    {selectedOrder.items.map((item: any, index: number) => (
                                         <div key={index} className="flex items-center space-x-4">
                                             <div className="w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center">
                                                 <Package className="w-8 h-8 text-slate-400" />

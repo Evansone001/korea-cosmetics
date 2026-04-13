@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
-  Package, 
-  TrendingUp, 
+import {
+  Package,
+  TrendingUp,
   TrendingDown,
   AlertCircle,
   DollarSign,
@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { apiClient } from '@/lib/api-client';
 
 interface StoreInventory {
   productId: string;
@@ -44,53 +45,42 @@ export default function StoreInventoryPage() {
   const [editingPrice, setEditingPrice] = useState<string | null>(null);
   const [newPrice, setNewPrice] = useState<number>(0);
 
-  // Mock data - in production this would come from API
+  // Fetch inventory from API
   useEffect(() => {
-    setTimeout(() => {
-      setInventory([
-        {
-          productId: 'wp_1',
-          productName: 'COSRX Advanced Snail 92 Cream',
-          purchasedQuantity: 50,
-          soldQuantity: 32,
-          availableQuantity: 18,
-          unitCost: 12.00,
-          currentRetailPrice: 28.00,
-          lastRestockedAt: '2026-03-15T10:30:00Z',
-          lowStockThreshold: 10,
-          manufacturer: 'COSRX',
-          category: 'Skincare',
-        },
-        {
-          productId: 'wp_2',
-          productName: 'Innisfree Green Tea Seed Serum',
-          purchasedQuantity: 30,
-          soldQuantity: 15,
-          availableQuantity: 15,
-          unitCost: 15.50,
-          currentRetailPrice: 35.00,
-          lastRestockedAt: '2026-03-10T14:20:00Z',
-          lowStockThreshold: 8,
-          manufacturer: 'Innisfree',
-          category: 'Skincare',
-        },
-        {
-          productId: 'wp_3',
-          productName: 'Beauty of Joseon Glow Serum',
-          purchasedQuantity: 100,
-          soldQuantity: 67,
-          availableQuantity: 33,
-          unitCost: 9.80,
-          currentRetailPrice: 22.00,
-          lastRestockedAt: '2026-03-20T09:15:00Z',
-          lowStockThreshold: 15,
-          manufacturer: 'Beauty of Joseon',
-          category: 'Skincare',
-        },
-      ]);
-      setLoading(false);
-    }, 1000);
+    fetchInventory();
   }, []);
+
+  const fetchInventory = async () => {
+    try {
+      setLoading(true);
+      const response = await apiClient.getInventory({ limit: 100 });
+
+      // Transform backend inventory to frontend format
+      const transformedInventory = response.inventory?.map((item: any) => ({
+        productId: item.product_id,
+        productName: item.product_name,
+        purchasedQuantity: item.purchased_quantity || 0,
+        soldQuantity: item.sold_quantity || 0,
+        availableQuantity: item.stock_quantity,
+        unitCost: item.cost_price || item.price * 0.5, // Fallback estimate
+        currentRetailPrice: item.price,
+        lastRestockedAt: item.last_purchased_at || item.updated_at,
+        lowStockThreshold: item.reorder_level,
+        manufacturer: item.category || 'Unknown',
+        category: item.category || 'General',
+        image: item.product_image,
+        aiStockoutRisk: item.ai_stockout_risk,
+        lastSoldAt: item.last_sold_at
+      })) || [];
+
+      setInventory(transformedInventory);
+    } catch (error) {
+      console.error('Failed to fetch inventory:', error);
+      toast.error('Failed to load inventory');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const updatePrice = (productId: string) => {
     setInventory(prev =>

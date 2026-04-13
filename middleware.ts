@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'demo-secret-change-in-production'
+const JWT_SECRET = process.env.JWT_SECRET_KEY || 'jwt-secret-string-change-in-production'
 
 // Routes that require authentication
 const AUTH_REQUIRED_ROUTES = ['/orders', '/profile', '/cart/checkout']
@@ -96,32 +96,52 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // Verify token and check roles
+  // Verify token and check roles by calling Flask backend
   if (token) {
-    const payload = await verifyToken(token)
-    console.log('[Middleware] Verify result:', payload ? { role: payload.role } : 'null')
-    
-    if (!payload) {
-      // Invalid or expired token - clear it and redirect
+    try {
+      const response = await fetch(`${process.env.FLASK_BACKEND_URL || 'http://127.0.0.1:5000'}/api/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (!response.ok) {
+          console.log('[Middleware] Invalid token from Flask backend')
+          if (requiresAuth || requiresSeller || requiresAdmin) {
+            console.log('[Middleware] Invalid token, redirecting to login')
+            const loginUrl = new URL('/login', request.url)
+            const redirectResponse = NextResponse.redirect(loginUrl)
+            redirectResponse.cookies.set('auth-token', '', { maxAge: 0 })
+
+            return redirectResponse
+          }
+      } else {
+        const data = await response.json()
+        const user = data.user
+        console.log('[Middleware] Verify result:', { role: user.role, email: user.email })
+        
+        // Check role requirements
+        if (requiresAdmin && user.role !== 'admin') {
+          console.log('[Middleware] Admin required but role is:', user.role)
+          return NextResponse.redirect(new URL('/', request.url))
+        }
+        
+        if (requiresSeller && !['admin', 'seller'].includes(user.role)) {
+          console.log('[Middleware] Seller or Admin are required but role is:', user.role)
+          return NextResponse.redirect(new URL('/', request.url))
+        }
+        
+        console.log('[Middleware] Access granted')
+      }
+    } catch (error) {
+      console.log('[Middleware] Error verifying token:', error)
       if (requiresAuth || requiresSeller || requiresAdmin) {
-        console.log('[Middleware] Invalid token, redirecting to login')
-        const response = NextResponse.redirect(new URL('/login', request.url))
+        const res = new URL('/login', request.url)
+        const response = NextResponse.redirect(new URL('/login', res))
         response.cookies.set('auth-token', '', { maxAge: 0 })
         return response
       }
-    } else {
-      // Check role requirements
-      if (requiresAdmin && payload.role !== 'admin') {
-        console.log('[Middleware] Admin required but role is:', payload.role)
-        return NextResponse.redirect(new URL('/', request.url))
-      }
-      
-      if (requiresSeller && !['admin', 'seller'].includes(payload.role)) {
-        console.log('[Middleware] Seller required but role is:', payload.role)
-        return NextResponse.redirect(new URL('/', request.url))
-      }
-      
-      console.log('[Middleware] Access granted')
     }
   }
 

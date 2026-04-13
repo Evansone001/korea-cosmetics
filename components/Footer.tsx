@@ -52,7 +52,7 @@ const Footer = () => {
             title: "CONTACT",
             links: [
                 { text: "+254-712-345-678", path: 'tel:+254712345678', icon: PhoneIcon },
-                { text: "info@koreabeautyhub.com", path: 'mailto:info@koreabeautyhub.com', icon: MailIcon },
+                { text: "info@KoreaCosmetics'hub.com", path: "mailto:info@KoreaCosmetics'hub.com", icon: MailIcon },
                 { text: "Nairobi, Kenya", path: '/contact', icon: MapPinIcon }
             ]
         }
@@ -74,13 +74,13 @@ const Footer = () => {
                             <div className="relative w-16 h-16">
                                 <Image 
                                     src={assets.korea_logo} 
-                                    alt="KoreaBeauty Hub Logo"
+                                    alt="KoreaCosmetics' Hub Logo"
                                     fill
                                     className="object-cover rounded-lg"
                                 />
                             </div>
                         </Link>
-                        <p className="max-w-[410px] mt-6 text-sm">Welcome to KoreaBeauty Hub, your trusted gateway to authentic Korean cosmetics. Based in Kenya, we connect African retailers and distributors with premium K-beauty products through our B2B wholesale platform.</p>
+                        <p className="max-w-[410px] mt-6 text-sm">Welcome to KoreaCosmetics' Hub, your trusted gateway to authentic Korean cosmetics. Based in Kenya, we connect African retailers and distributors with premium K-beauty products through our B2B wholesale platform.</p>
                         <div className="flex items-center gap-3 mt-5">
                             {socialIcons.map((item, i) => (
                                 <Link href={item.link} key={i} className="flex items-center justify-center w-10 h-10 bg-slate-100 hover:scale-105 hover:border border-slate-300 transition rounded-full">
@@ -106,7 +106,7 @@ const Footer = () => {
                     </div>
                 </div>
                 <p className="py-4 text-sm text-slate-500">
-                    Copyright 2025 © KoreaBeauty Hub All Right Reserved.
+                    Copyright 2025 © KoreaCosmetics' Hub All Right Reserved.
                 </p>
             </div>
         </footer>

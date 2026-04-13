@@ -56,7 +56,7 @@ export default function StoreAnalyticsPage() {
                     <div className="bg-white rounded-lg shadow p-6">
                         <h3 className="text-sm font-medium text-gray-500 mb-2">Total Revenue</h3>
                         <p className="text-2xl font-bold text-gray-900">
-                            ${platformMetrics.totalRevenue.toLocaleString()}
+                            KES ${platformMetrics.totalRevenue.toLocaleString()}
                         </p>
                     </div>
                     <div className="bg-white rounded-lg shadow p-6">
@@ -131,7 +131,7 @@ export default function StoreAnalyticsPage() {
                                         {store.owner}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        ${store.metrics.revenue.toLocaleString()}
+                                        KES ${store.metrics.revenue.toLocaleString()}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                         {store.metrics.orders.toLocaleString()}

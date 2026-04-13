@@ -38,7 +38,7 @@ export default function StoreProfilePage() {
   // Personal info state
   const [isEditingPersonal, setIsEditingPersonal] = useState(false)
   const [name, setName] = useState(user?.name || 'Store Owner')
-  const [email, setEmail] = useState(user?.email || 'store@koreabeauty.com')
+  const [email, setEmail] = useState(user?.email || "store@KoreaCosmetics.com")
   const [phone, setPhone] = useState('+254 712 345 678')
 
   // Store info state
@@ -101,7 +101,7 @@ export default function StoreProfilePage() {
 
   const handleCancelPersonal = () => {
     setName(user?.name || 'Store Owner')
-    setEmail(user?.email || 'store@koreabeauty.com')
+    setEmail(user?.email || "store@KoreaCosmetics.com")
     setPhone('+254 712 345 678')
     setIsEditingPersonal(false)
   }

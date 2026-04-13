@@ -1,16 +1,7 @@
 import { NextResponse } from 'next/server';
-import { generateToken } from '@/lib/jwt';
 import { logUserAction, type UserAction } from '@/lib/services/userActionLog';
 
-// JWT secret - in production, use a proper secret from env
-const JWT_SECRET = process.env.JWT_SECRET || 'demo-secret-change-in-production';
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  role: 'customer' | 'seller' | 'admin';
-}
+const FLASK_BACKEND_URL = process.env.FLASK_BACKEND_URL || 'http://127.0.0.1:5000';
 
 // POST - Login
 export async function POST(request: Request) {
@@ -26,56 +17,31 @@ export async function POST(request: Request) {
       );
     }
 
-    // Demo authentication - replace with database lookup
-    let user: User | null = null;
-    
-    console.log('[Login API] Attempting login:', { email, passwordLength: password?.length, expectedEmail: 'admin@koreabeauty.com' });
+    // Call Flask backend for authentication
+    console.log('[Login API] Attempting login with Flask backend:', { email, passwordLength: password?.length });
 
-    if (email === 'admin@koreabeauty.com' && password === 'admin123') {
-      user = {
-        id: '1',
-        email: 'admin@koreabeauty.com',
-        name: 'Admin User',
-        role: 'admin',
-      };
-    } else if (email === 'seller@koreabeauty.com' && password === 'seller123') {
-      user = {
-        id: '2',
-        email: 'seller@koreabeauty.com',
-        name: 'Seller User',
-        role: 'seller',
-      };
-    } else if (email === 'customer@koreabeauty.com' && password === 'customer123') {
-      user = {
-        id: '3',
-        email: 'customer@koreabeauty.com',
-        name: 'John Doe',
-        role: 'customer',
-      };
-    } else if (email && password) {
-      // Auto-create customer for any valid-looking email
-      user = {
-        id: crypto.randomUUID(),
-        email,
-        name: email.split('@')[0],
-        role: 'customer',
-      };
-    }
+    const flaskResponse = await fetch(`${FLASK_BACKEND_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    });
 
-    if (!user) {
+    const flaskData = await flaskResponse.json();
+
+    if (!flaskResponse.ok) {
+      console.log('[Login API] Flask login failed:', flaskData);
       return NextResponse.json(
-        { error: 'Invalid email or password' },
-        { status: 401 }
+        { error: flaskData.error || 'Login failed' },
+        { status: flaskResponse.status }
       );
     }
 
-    const token = await generateToken({
-      sub: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-    });
-    console.log('[Login API] Generated token for role:', user.role);
+    const user = flaskData.user;
+    const token = flaskData.access_token;
+    
+    console.log('[Login API] Flask login successful for role:', user.role);
 
     // Log successful login
     const forwarded = request.headers.get('x-forwarded-for');
@@ -91,24 +57,31 @@ export async function POST(request: Request) {
       userAgent: userAgent,
     }).catch(err => console.error('Failed to log login action:', err));
 
-    // Create response with user data
+    // Create response with user data 
     const response = NextResponse.json({
       success: true,
+      message: flaskData.message || 'Login successful',
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
+        email_verified: user.email_verified,
+        auth_provider: user.auth_provider,
+        last_login_method: user.last_login_method,
       },
+      access_token: token,
     });
 
-    // Set secure HTTP-only cookie
+    // Set secure HTTP-only cookie with Flask token
     console.log('[Login API] Setting cookie, token length:', token?.length);
+    // Calculate expiration: 30 days from now (matching Flask JWT_ACCESS_TOKEN_EXPIRES)
+    const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     response.cookies.set('auth-token', token, {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 24 * 60 * 60,
+      expires: expires,
       path: '/',
     });
     console.log('[Login API] Cookie set');

@@ -40,7 +40,7 @@ export async function GET(request: Request) {
   }
 }
 
-// POST - Import products from CRM into KoreaBeauty Hub
+// POST - Import products from CRM into KoreaCosmetics' Hub
 export async function POST(request: Request) {
   try {
     const { productIds, autoDistribute } = await request.json();
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
       productsToSync = await crmProductSync.fetchProductsFromCRM();
     }
 
-    // Sync to KoreaBeauty Hub
+    // Sync to KoreaCosmetics' Hub
     const result = await crmProductSync.syncProducts(productsToSync);
 
     return NextResponse.json({

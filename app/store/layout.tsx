@@ -1,8 +1,8 @@
 import StoreLayout from "@/components/store/StoreLayout";
 
 export const metadata = {
-    title: "KoreaBeauty Hub - Store Dashboard",
-    description: "KoreaBeauty Hub - Store Dashboard",
+    title: "KoreaCosmetics' Hub - Store Dashboard",
+    description: "KoreaCosmetics' Hub - Store Dashboard",
 };
 
 export default function RootStoreLayout({ children }: { children: React.ReactNode }) {

@@ -7,13 +7,13 @@ import { CreditCard, Truck, MapPin, ChevronRight, Lock, CheckCircle } from 'luci
 import Image from 'next/image';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import type { CartItem, Address } from '@/types';
+import type { CartItem, Address, Product } from '@/types';
+import { apiClient } from '@/lib/api-client';
 
 export default function CheckoutPage() {
     const router = useRouter();
     const dispatch = useAppDispatch();
     const { cartItems } = useAppSelector(state => state.cart);
-    const products = useAppSelector(state => state.product.list);
     const { user } = useAppSelector(state => state?.auth || { user: null, isAuthenticated: false, isLoading: true });
 
     const [step, setStep] = useState<'shipping' | 'payment' | 'review'>('shipping');
@@ -43,27 +43,37 @@ export default function CheckoutPage() {
     const finalTotal = totalPrice + shipping - discount;
 
     useEffect(() => {
-        if (cartItems && products.length > 0) {
-            const newCartArray: CartItem[] = [];
-            let price = 0;
-            for (const [key, value] of Object.entries(cartItems)) {
-                const product = products.find(p => p.id === key);
-                if (product) {
-                    newCartArray.push({ product, quantity: value });
-                    price += product.price * value;
+        const fetchCartProducts = async () => {
+            if (cartItems && Object.keys(cartItems).length > 0) {
+                const newCartArray: CartItem[] = [];
+                let price = 0;
+                
+                for (const [key, value] of Object.entries(cartItems)) {
+                    try {
+                        const product = await apiClient.getProduct(key) as Product;
+                        if (product) {
+                            newCartArray.push({ product, quantity: value });
+                            price += product.price * value;
+                        }
+                    } catch (error) {
+                        console.error(`Failed to fetch product ${key}:`, error);
+                    }
                 }
+                
+                setCartArray(newCartArray);
+                setTotalPrice(price);
             }
-            setCartArray(newCartArray);
-            setTotalPrice(price);
-        }
-        setIsLoading(false);
-    }, [cartItems, products]);
+            setIsLoading(false);
+        };
+        
+        fetchCartProducts();
+    }, [cartItems]);
 
     useEffect(() => {
-        if (!isLoading && cartArray.length === 0 && products.length > 0) {
+        if (!isLoading && cartArray.length === 0 && Object.keys(cartItems).length > 0) {
             router.push('/cart');
         }
-    }, [cartArray, products, router, isLoading]);
+    }, [cartArray, cartItems, router, isLoading]);
 
     const handleApplyPromo = () => {
         if (promoCode.toLowerCase() === 'beauty10') {
@@ -77,11 +87,61 @@ export default function CheckoutPage() {
     const handlePlaceOrder = async () => {
         setIsProcessing(true);
         
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        toast.success('Order placed successfully!');
-        router.push('/orders');
+        try {
+            // Get JWT token
+            let token: string | null = null;
+            if (typeof document !== 'undefined') {
+                const cookies = document.cookie.split(';');
+                const authCookie = cookies.find(cookie => cookie.trim().startsWith('auth-token='));
+                if (authCookie) {
+                    token = authCookie.split('=')[1];
+                }
+            }
+            
+            if (!token && typeof localStorage !== 'undefined') {
+                token = localStorage.getItem('auth-token');
+            }
+            
+            // Prepare order items
+            const orderItems = cartArray.map(item => ({
+                product_id: item.product.id,
+                quantity: item.quantity,
+                price: item.product.price
+            }));
+            
+            // Prepare headers
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            
+            // Call backend API to create order
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000'}/api/orders/create`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    items: orderItems,
+                    shipping_address: shippingAddress,
+                    payment_method: paymentMethod
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to place order');
+            }
+            
+            toast.success('Order placed successfully!');
+            router.push('/orders');
+        } catch (error) {
+            console.error('Order placement error:', error);
+            toast.error(error instanceof Error ? error.message : 'Failed to place order');
+        } finally {
+            setIsProcessing(false);
+        }
     };
 
     const isShippingValid = shippingAddress.name && shippingAddress.email && 
@@ -307,12 +367,18 @@ export default function CheckoutPage() {
                                 {cartArray.map((item, index) => (
                                     <div key={index} className="flex gap-3">
                                         <div className="w-16 h-16 bg-slate-100 rounded-lg overflow-hidden relative flex-shrink-0">
-                                            <Image
-                                                src={item.product.images[0]}
-                                                alt={item.product.name}
-                                                fill
-                                                className="object-cover"
-                                            />
+                                            {item.product.images && item.product.images.length > 0 ? (
+                                                <Image
+                                                    src={item.product.images[0]}
+                                                    alt={item.product.name}
+                                                    fill
+                                                    className="object-cover"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                                    <span className="text-2xl">📦</span>
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm font-medium text-slate-900 truncate">{item.product.name}</p>

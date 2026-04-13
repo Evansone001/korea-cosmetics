@@ -1,4 +1,4 @@
-// Master Admin Types for KoreaBeauty Hub Control Center
+// Master Admin Types for KoreaCosmetics' Hub Control Center
 
 export interface StorePerformance {
     id: string

@@ -5,39 +5,56 @@ import {
   Package, 
   Plus, 
   Search, 
-  Filter,
+  Minus,
   CheckCircle2,
   ShoppingBag,
-  Building2
+  Building2,
+  ShoppingCart,
+  Store
 } from 'lucide-react';
 import Image from 'next/image';
 import toast from 'react-hot-toast';
+import { apiClient } from '@/lib/api-client';
 
-interface AdminProduct {
+interface CatalogProduct {
   id: string;
   name: string;
   description: string;
-  price: number;
-  mrp?: number;
   category: string;
-  manufacturer: string;
-  brand: string;
-  images: string[];
-  stock: number;
-  origin: string;
+  brand?: string;
+  customer_type?: 'B2C' | 'B2B' | 'BOTH';
+  warehouse_stock?: number;
+  store_price?: number;
+  store_moq?: number;
+  b2b_moq?: number;
+  images?: string[];
+  manufacturer?: string;
+  origin?: string;
   alreadyAdded?: boolean;
 }
 
+// Helper to get full image URL
+const getImageUrl = (path: string | undefined): string => {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  // Use backend URL for relative paths
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000';
+  return `${backendUrl}${path}`;
+};
+
 export default function StoreCatalogPage() {
-  const [products, setProducts] = useState<AdminProduct[]>([]);
+  const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedManufacturer, setSelectedManufacturer] = useState('');
+  const [storeType, setStoreType] = useState<string>('');
   const [addingProduct, setAddingProduct] = useState<string | null>(null);
-
-  const categories = ['Skincare', 'Makeup', 'Haircare', 'Bodycare', 'Fragrance'];
-  const manufacturers = ['COSRX', 'Innisfree', 'Some By Mi', 'Beauty of Joseon', 'Laneige'];
+  
+  // Purchase dialog state
+  const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
+  const [isPurchaseDialogOpen, setIsPurchaseDialogOpen] = useState(false);
+  const [quantity, setQuantity] = useState(1);
+  const [isPurchasing, setIsPurchasing] = useState(false);
 
   useEffect(() => {
     fetchAvailableProducts();
@@ -45,58 +62,72 @@ export default function StoreCatalogPage() {
 
   const fetchAvailableProducts = async () => {
     try {
-      // Fetch products from admin catalog that this store doesn't have yet
-      const response = await fetch('/api/store/catalog');
-      const data = await response.json();
-
-      if (response.ok) {
-        setProducts(data.products || []);
-      } else {
-        toast.error(data.error || 'Failed to fetch products');
-      }
+      // Fetch warehouse catalog products (filtered by store type)
+      const response = await apiClient.getStoreCatalog({
+        category: selectedCategory || undefined,
+        search: searchQuery || undefined
+      });
+      setProducts(response.products || []);
+      setStoreType(response.store_customer_type || 'B2C');
     } catch (error) {
+      console.error('Failed to fetch catalog:', error);
       toast.error('Failed to load catalog');
     } finally {
       setLoading(false);
     }
   };
 
-  const addToStore = async (productId: string) => {
-    setAddingProduct(productId);
+  const openPurchaseDialog = (product: CatalogProduct) => {
+    setSelectedProduct(product);
+    setQuantity(storeType === 'B2B' ? (product.store_moq || 1) : 1);
+    setIsPurchaseDialogOpen(true);
+  };
+
+  const handlePurchase = async () => {
+    if (!selectedProduct) return;
+    
+    if (quantity < 1) {
+      toast.error('Quantity must be at least 1');
+      return;
+    }
+    
+    if (storeType === 'B2B' && quantity < (selectedProduct.store_moq || 1)) {
+      toast.error(`Minimum order quantity is ${selectedProduct.store_moq}`);
+      return;
+    }
+    
+    setAddingProduct(selectedProduct.id);
+    setIsPurchasing(true);
+    
     try {
-      const response = await fetch('/api/store/catalog', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        toast.success('Product added to your store!');
-        // Mark as added in the UI
-        setProducts(prev =>
-          prev.map(p =>
-            p.id === productId ? { ...p, alreadyAdded: true } : p
-          )
-        );
-      } else {
-        toast.error(data.error || 'Failed to add product');
-      }
-    } catch (error) {
-      toast.error('Failed to add product');
+      await apiClient.purchaseFromWarehouse(selectedProduct.id, quantity);
+      toast.success(`Purchased ${quantity} units of ${selectedProduct.name}`);
+      setIsPurchaseDialogOpen(false);
+      fetchAvailableProducts();
+    } catch (error: any) {
+      console.error('Failed to purchase:', error);
+      toast.error(error.message || 'Failed to purchase product');
     } finally {
       setAddingProduct(null);
+      setIsPurchasing(false);
     }
   };
+
+  const handleSearch = () => {
+    setLoading(true);
+    fetchAvailableProducts();
+  };
+
+  // Get unique categories from products
+  const categories = ['', ...Array.from(new Set(products.map(p => p.category)))];
+  const manufacturers = ['COSRX', 'Innisfree', 'Some By Mi', 'Beauty of Joseon', 'Laneige'];
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          product.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = !selectedCategory || product.category === selectedCategory;
-    const matchesManufacturer = !selectedManufacturer || product.manufacturer === selectedManufacturer;
     
-    return matchesSearch && matchesCategory && matchesManufacturer;
+    return matchesSearch && matchesCategory;
   });
 
   if (loading) {
@@ -133,11 +164,11 @@ export default function StoreCatalogPage() {
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Building2 className="text-blue-600" size={20} />
+              <Store className="text-blue-600" size={20} />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-900">{manufacturers.length}</p>
-              <p className="text-sm text-slate-500">Suppliers</p>
+              <p className="text-2xl font-bold text-slate-900">{storeType}</p>
+              <p className="text-sm text-slate-500">Store Type</p>
             </div>
           </div>
         </div>
@@ -148,9 +179,9 @@ export default function StoreCatalogPage() {
             </div>
             <div>
               <p className="text-2xl font-bold text-slate-900">
-                {products.filter(p => p.alreadyAdded).length}
+                {products.filter(p => (p.warehouse_stock ?? 0) > 0).length}
               </p>
-              <p className="text-sm text-slate-500">In Your Store</p>
+              <p className="text-sm text-slate-500">In Stock</p>
             </div>
           </div>
         </div>
@@ -165,31 +196,28 @@ export default function StoreCatalogPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               placeholder="Search products..."
               className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
             />
           </div>
           <div className="flex gap-3">
             <select
-              value={selectedManufacturer}
-              onChange={(e) => setSelectedManufacturer(e.target.value)}
-              className="border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
-            >
-              <option value="">All Brands</option>
-              {manufacturers.map(m => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-            <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
               className="border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
             >
               <option value="">All Categories</option>
-              {categories.map(c => (
+              {categories.filter(c => c).map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
+            <button
+              onClick={handleSearch}
+              className="px-4 py-2.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800"
+            >
+              Search
+            </button>
           </div>
         </div>
       </div>
@@ -202,9 +230,9 @@ export default function StoreCatalogPage() {
             className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-lg transition-shadow"
           >
             <div className="relative aspect-square bg-slate-100">
-              {product.images[0] ? (
+              {product.images && product.images[0] ? (
                 <Image
-                  src={product.images[0]}
+                  src={getImageUrl(product.images[0])}
                   alt={product.name}
                   fill
                   className="object-cover"
@@ -215,18 +243,12 @@ export default function StoreCatalogPage() {
                 </div>
               )}
               <div className="absolute top-3 right-3 bg-white/90 backdrop-blur px-2 py-1 rounded text-xs font-medium">
-                {product.origin}
+                {product.origin || product.brand}
               </div>
-              {product.alreadyAdded && (
-                <div className="absolute top-3 left-3 bg-green-500 text-white px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
-                  <CheckCircle2 size={12} />
-                  Added
-                </div>
-              )}
             </div>
             <div className="p-4">
               <p className="text-xs text-slate-500 uppercase tracking-wide">
-                {product.manufacturer}
+                {product.brand}
               </p>
               <h3 className="font-medium text-slate-900 mt-1 line-clamp-2">
                 {product.name}
@@ -239,46 +261,34 @@ export default function StoreCatalogPage() {
                   {product.category}
                 </span>
                 <span className={`text-xs px-2 py-1 rounded ${
-                  product.stock > 10
+                  (product.warehouse_stock ?? 0) > 10
                     ? 'bg-green-100 text-green-700'
-                    : product.stock > 0
+                    : (product.warehouse_stock ?? 0) > 0
                     ? 'bg-amber-100 text-amber-700'
                     : 'bg-red-100 text-red-700'
                 }`}>
-                  {product.stock} available
+                  {product.warehouse_stock ?? 0} available
                 </span>
               </div>
               <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
                 <div>
-                  <span className="font-bold text-slate-900">${product.price}</span>
-                  {product.mrp && (
-                    <span className="text-sm text-slate-400 line-through ml-2">
-                      ${product.mrp}
-                    </span>
+                  <span className="font-bold text-slate-900">${product.store_price ?? 0}</span>
+                  {storeType === 'B2B' && (
+                    <span className="text-xs text-slate-500 ml-1">(MOQ: {product.store_moq || 1})</span>
                   )}
                 </div>
-                {product.alreadyAdded ? (
-                  <button
-                    disabled
-                    className="flex items-center gap-2 bg-green-100 text-green-700 px-4 py-2 rounded-lg font-medium cursor-default"
-                  >
-                    <CheckCircle2 size={16} />
-                    Added
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => addToStore(product.id)}
-                    disabled={addingProduct === product.id || product.stock === 0}
-                    className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg font-medium hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {addingProduct === product.id ? (
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : (
-                      <Plus size={16} />
-                    )}
-                    Add
-                  </button>
-                )}
+                <button
+                  onClick={() => openPurchaseDialog(product)}
+                  disabled={addingProduct === product.id || (product.warehouse_stock ?? 0) === 0}
+                  className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg font-medium hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {addingProduct === product.id ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <ShoppingCart size={16} />
+                  )}
+                  Purchase
+                </button>
               </div>
             </div>
           </div>
@@ -289,17 +299,91 @@ export default function StoreCatalogPage() {
         <div className="text-center py-12">
           <Package className="w-16 h-16 text-slate-200 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-slate-900 mb-2">
-            {searchQuery || selectedCategory || selectedManufacturer
+            {searchQuery || selectedCategory
               ? 'No products match your filters'
               : 'No products available yet'
             }
           </h3>
           <p className="text-slate-500">
-            {searchQuery || selectedCategory || selectedManufacturer
+            {searchQuery || selectedCategory
               ? 'Try adjusting your search or filters'
               : 'Check back soon - admin is adding new products!'
             }
           </p>
+        </div>
+      )}
+
+      {/* Purchase Dialog */}
+      {isPurchaseDialogOpen && selectedProduct && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Purchase Product</h3>
+            <div className="mb-4">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center">
+                  <Package className="w-8 h-8 text-slate-400" />
+                </div>
+                <div>
+                  <h4 className="font-medium">{selectedProduct.name}</h4>
+                  <p className="text-sm text-slate-500">{selectedProduct.brand}</p>
+                  <p className="text-lg font-bold">${selectedProduct.store_price} / unit</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-4 mb-4">
+                <span className="text-sm font-medium">Quantity:</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    className="w-8 h-8 flex items-center justify-center border rounded"
+                  >
+                    <Minus size={16} />
+                  </button>
+                  <input
+                    type="number"
+                    value={quantity}
+                    onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                    className="w-16 text-center border rounded py-1"
+                  />
+                  <button
+                    onClick={() => setQuantity(quantity + 1)}
+                    className="w-8 h-8 flex items-center justify-center border rounded"
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
+              </div>
+              
+              {storeType === 'B2B' && (
+                <p className="text-sm text-slate-500 mb-2">Minimum order quantity: {selectedProduct.store_moq || 1}</p>
+              )}
+              
+              <p className="text-sm text-slate-500">Available: {selectedProduct.warehouse_stock ?? 0} units</p>
+              
+              <div className="mt-4 pt-4 border-t">
+                <div className="flex justify-between text-lg font-semibold">
+                  <span>Total:</span>
+                  <span>${((selectedProduct.store_price ?? 0) * quantity).toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => setIsPurchaseDialogOpen(false)}
+                className="flex-1 px-4 py-2 border rounded-lg hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePurchase}
+                disabled={isPurchasing || quantity > (selectedProduct.warehouse_stock ?? 0)}
+                className="flex-1 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50"
+              >
+                {isPurchasing ? 'Processing...' : 'Confirm Purchase'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

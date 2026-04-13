@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
-  Package, 
-  ShoppingCart, 
-  Plus, 
-  Minus, 
+import {
+  Package,
+  ShoppingCart,
+  Plus,
+  Minus,
   Trash2,
   CreditCard,
   Building2,
@@ -20,6 +20,9 @@ import {
 import Image from 'next/image';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
+import { apiClient } from '@/lib/api-client';
+import AddressModal from '@/components/AddressModal';
+import { useAppSelector } from '@/lib/hooks';
 
 interface WholesaleProduct {
   id: string;
@@ -43,6 +46,7 @@ interface CartItem extends WholesaleProduct {
 }
 
 export default function WholesaleStorePage() {
+  const { user } = useAppSelector(state => state?.auth || { user: null });
   const [products, setProducts] = useState<WholesaleProduct[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,22 +56,61 @@ export default function WholesaleStorePage() {
   const [checkoutStep, setCheckoutStep] = useState<'cart' | 'shipping' | 'payment' | 'success'>('cart');
   const [discountCode, setDiscountCode] = useState('');
   const [placingOrder, setPlacingOrder] = useState(false);
+  const [selectedAddressId, setSelectedAddressId] = useState('');
+  const [addresses, setAddresses] = useState<any[]>([]);
+  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [storeData, setStoreData] = useState<any>(null);
 
   const categories = ['Skincare', 'Makeup', 'Haircare', 'Bodycare', 'Fragrance'];
 
   useEffect(() => {
     fetchProducts();
+    fetchAddresses();
+    fetchStoreData();
   }, []);
+
+  const fetchAddresses = async () => {
+    try {
+      const response = await apiClient.getAddresses();
+      setAddresses(response.addresses || []);
+      if (response.addresses && response.addresses.length > 0) {
+        setSelectedAddressId(response.addresses[0].id);
+      }
+    } catch (error) {
+      console.error('Error fetching addresses:', error);
+    }
+  };
+
+  const fetchStoreData = async () => {
+    if (user?.role === 'seller') {
+      try {
+        const response: any = await apiClient.getMyStore();
+        if (response?.store) {
+          setStoreData(response.store);
+        }
+      } catch (error) {
+        console.error('Error fetching store data:', error);
+      }
+    }
+  };
+
+  const handleAddressCreated = (newAddress: any) => {
+    // Refresh addresses list and select the new address
+    fetchAddresses();
+    setSelectedAddressId(newAddress.id);
+  };
 
   const fetchProducts = async () => {
     try {
-      const response = await fetch('/api/store/wholesale');
-      const data = await response.json();
-      if (response.ok) {
-        setProducts(data.products || []);
-      }
+      const response = await apiClient.getStoreWholesaleCatalog({
+        category: selectedCategory || undefined,
+        search: searchQuery || undefined
+      });
+      setProducts(response?.products || []);
     } catch (error) {
+      console.error('Error fetching products:', error);
       toast.error('Failed to load catalog');
+      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -125,32 +168,30 @@ export default function WholesaleStorePage() {
   const total = taxableAmount + tax;
 
   const placeOrder = async () => {
+    if (!selectedAddressId) {
+      setShowAddressModal(true);
+      return;
+    }
+
     setPlacingOrder(true);
     try {
-      const response = await fetch('/api/store/wholesale/order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shippingAddress: {
-            name: 'Store Owner',
-            address: '123 Business St',
-            city: 'Nairobi',
-            country: 'Kenya',
-            phone: '+254712345678',
-          },
-          discountCode,
-        }),
+      // Purchase each cart item from warehouse
+      const purchasePromises = cart.map(async (item) => {
+        return await apiClient.purchaseFromWholesale(item.id, item.cartQuantity, discountCode, selectedAddressId);
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        toast.success('Order placed successfully!');
-        setCheckoutStep('success');
-        setCart([]);
-      } else {
-        toast.error(data.error || 'Failed to place order');
+      const results = await Promise.allSettled(purchasePromises);
+      
+      // Check if all purchases succeeded
+      const failedPurchases = results.filter(r => r.status === 'rejected');
+      if (failedPurchases.length > 0) {
+        toast.error(`${failedPurchases.length} item(s) failed to purchase`);
+        return;
       }
+
+      toast.success('B2B order placed successfully and inventory updated!');
+      setCheckoutStep('success');
+      setCart([]);
     } catch (error) {
       toast.error('Failed to place order');
     } finally {
@@ -159,8 +200,8 @@ export default function WholesaleStorePage() {
   };
 
   const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         product.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = (product.name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+                         (product.description?.toLowerCase() || '').includes(searchQuery.toLowerCase());
     const matchesCategory = !selectedCategory || product.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -301,14 +342,21 @@ export default function WholesaleStorePage() {
 
         {/* Cart Sidebar */}
         {showCart && (
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl border border-slate-200 sticky top-4">
-              <div className="p-4 border-b border-slate-200">
+          <div className="lg:col-span-1 fixed inset-0 lg:static lg:inset-auto z-50 lg:z-auto">
+            <div className="absolute inset-0 lg:static bg-black/50 lg:bg-transparent" onClick={() => setShowCart(false)} />
+            <div className="absolute right-0 top-0 bottom-0 lg:static w-full lg:w-auto bg-white rounded-xl border border-slate-200 lg:sticky lg:top-4 overflow-y-auto lg:max-h-[calc(100vh-2rem)]">
+              <div className="p-4 border-b border-slate-200 flex items-center justify-between">
                 <h2 className="font-semibold text-slate-900 flex items-center gap-2">
                   <ShoppingCart size={18} />
                   Your Cart
                   <span className="text-sm text-slate-500">({cart.length} items)</span>
                 </h2>
+                <button
+                  onClick={() => setShowCart(false)}
+                  className="lg:hidden p-2 hover:bg-slate-100 rounded-lg"
+                >
+                  ✕
+                </button>
               </div>
 
               {cart.length === 0 ? (
@@ -359,6 +407,40 @@ export default function WholesaleStorePage() {
                   </div>
 
                   <div className="p-4 border-t border-slate-200 space-y-3">
+                    {/* Address Selection */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium text-slate-700">Shipping Address</label>
+                        <button
+                          onClick={() => setShowAddressModal(true)}
+                          className="text-xs text-slate-600 hover:text-slate-900 font-medium"
+                        >
+                          + Add new
+                        </button>
+                      </div>
+                      <select
+                        value={selectedAddressId}
+                        onChange={(e) => setSelectedAddressId(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      >
+                        {addresses.length === 0 ? (
+                          <option value="">No addresses available</option>
+                        ) : (
+                          addresses.map((addr) => (
+                            <option key={addr.id} value={addr.id}>
+                              {addr.street}, {addr.city}, {addr.state} {addr.zip}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                      {addresses.length === 0 && (
+                        <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                          <AlertCircle size={12} />
+                          Add a shipping address to place your order
+                        </p>
+                      )}
+                    </div>
+
                     {/* Discount Code */}
                     <div className="flex gap-2">
                       <input
@@ -397,8 +479,8 @@ export default function WholesaleStorePage() {
 
                     <button
                       onClick={placeOrder}
-                      disabled={placingOrder}
-                      className="w-full flex items-center justify-center gap-2 bg-slate-900 text-white px-4 py-3 rounded-xl font-medium hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                      disabled={placingOrder || !selectedAddressId}
+                      className="w-full flex items-center justify-center gap-2 bg-slate-900 text-white px-4 py-3 rounded-xl font-medium hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       {placingOrder ? (
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -442,6 +524,16 @@ export default function WholesaleStorePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Address Modal */}
+      {showAddressModal && (
+        <AddressModal
+          setShowAddressModal={setShowAddressModal}
+          onAddressCreated={handleAddressCreated}
+          userData={user || undefined}
+          storeData={storeData}
+        />
       )}
     </div>
   );

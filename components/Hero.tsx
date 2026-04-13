@@ -2,93 +2,123 @@
 import { assets } from '@/assets/assets'
 import { ArrowRightIcon, ShoppingCartIcon, StarIcon } from 'lucide-react'
 import Image from 'next/image'
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useAppDispatch } from '@/lib/hooks'
+import { useAppDispatch, useAppSelector } from '@/lib/hooks'
 import { addToCart } from '@/lib/features/cart/cartSlice'
+import toast from 'react-hot-toast'
 
 const Hero = () => {
     const currency = "KShs"
     const dispatch = useAppDispatch()
+    const { user } = useAppSelector(state => state?.auth || { user: null })
+    const [featuredProducts, setFeaturedProducts] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
 
     const addToCartHandler = (productId: string) => {
         dispatch(addToCart({ productId }))
     }
 
-    const featuredProducts = [
-        {
-            id: "prod_1",
-            name: "[COSRX] Advanced Snail 96 Mucin Power Essence",
-            price: 3500,
-            originalPrice: 4500,
-            image: assets.essence,
-            rating: 4.9,
-            badge: "Best Seller",
-            wholesalePrice: 1999,
-            minOrder: 10,
-            description: "Lightweight essence with 96% snail mucin extract for intense hydration and skin repair. Perfect for dry and sensitive skin types.",
-            keyBenefits: [
-                "🐌 96% snail mucin for powerful skin repair",
-                "💧 Intense hydration and moisture retention",
-                "✨ Improves skin elasticity and texture",
-                "🌟 Helps fade dark spots and acne scars"
-            ],
-            skinConcerns: "Dryness, Scars, Texture, Aging",
-            skinTypes: "All skin types",
-            texture: "Lightweight essence",
-            keyIngredients: "Snail Secretion Filtrate (96%), Niacinamide",
-            brand: "COSRX",
-            size: "100 ml"
-        },
-        {
-            id: "prod_2", 
-            name: "Korean Beauty Model Anna Collection",
-            price: 9500,
-            originalPrice: 12000,
-            image: assets.anna_keibalo,
-            rating: 4.8,
-            badge: "Exclusive",
-            wholesalePrice: 5500,
-            minOrder: 5,
-            description: "Premium Korean cosmetics set featuring Anna Keibalo's favorite products for flawless skin. Complete routine for glass skin effect.",
-            keyBenefits: [
-                "� Model curated collection",
-                "✨ Complete glass skin routine",
-                "💎 Premium quality products", 
-                "🌟 Visible results in 30 days"
-            ],
-            skinConcerns: "Overall skin health, Radiance",
-            skinTypes: "All skin types",
-            texture: "Various textures",
-            keyIngredients: "Premium Korean botanicals",
-            brand: "KoreaBeauty Hub",
-            size: "Full set"
-        },
-        {
-            id: "prod_3",
-            name: "Elena Soroka K-Beauty Essentials",
-            price: 6800,
-            originalPrice: 8500,
-            image: assets.elena_soroka,
-            rating: 4.7,
-            badge: "Popular",
-            wholesalePrice: 3999,
-            minOrder: 8,
-            description: "Curated collection by Elena Soroka featuring must-have Korean beauty products for natural, glowing skin.",
-            keyBenefits: [
-                "� Natural glow enhancement",
-                "� Model approved selection",
-                "� Deep hydration focus",
-                "🌸 Gentle yet effective"
-            ],
-            skinConcerns: "Natural radiance, Hydration",
-            skinTypes: "Normal, Combination, Dry",
-            texture: "Various textures",
-            keyIngredients: "Natural Korean extracts",
-            brand: "KoreaBeauty Hub",
-            size: "Essential set"
+    const handleB2BClick = (productId: string) => {
+        if (!user) {
+            toast.error('Please login to access B2B ordering')
+            return
         }
-    ]
+
+        if (user.role === 'seller') {
+            // Redirect to seller dashboard wholesale category
+            window.location.href = '/store/wholesale'
+        } else {
+            // Show toast notification to create seller account
+            toast(() => (
+                <div className="flex flex-col gap-2">
+                    <span className="font-medium">B2B ordering requires a seller account</span>
+                    <Link 
+                        href="/seller-register" 
+                        className="bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 transition-colors text-center"
+                    >
+                        Create Seller Account
+                    </Link>
+                </div>
+            ), { duration: 5000 })
+        }
+    }
+
+    // Fetch featured products from backend
+    useEffect(() => {
+        const fetchFeaturedProducts = async () => {
+            try {
+                setLoading(true)
+                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000'}/api/products?featured=true&limit=10`)
+                
+                if (response.ok) {
+                    const data = await response.json()
+                    // Map backend product structure to frontend component structure
+                    const mappedProducts = (data.products || []).map((product: any) => ({
+                        id: product.id,
+                        name: product.name,
+                        price: product.price,
+                        originalPrice: product.mrp || product.price,
+                        image: product.images?.[0] || assets.essence,
+                        rating: product.ai_popularity_score || 4.5,
+                        badge: product.featured ? "Featured" : "Popular",
+                        wholesalePrice: product.b2b_wholesale_price || Math.floor(product.price * 0.6),
+                        minOrder: product.b2b_moq || 5,
+                        description: product.description || "Premium Korean cosmetics product",
+                        keyBenefits: [],
+                        skinConcerns: "",
+                        skinTypes: "All skin types",
+                        texture: "",
+                        keyIngredients: product.ingredients || "",
+                        brand: product.brand || "Korean Brand",
+                        size: ""
+                    }))
+                    
+                    // If no featured products, fetch regular products as fallback
+                    if (mappedProducts.length === 0) {
+                        const fallbackResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000'}/api/products?limit=10`)
+                        if (fallbackResponse.ok) {
+                            const fallbackData = await fallbackResponse.json()
+                            const fallbackMappedProducts = (fallbackData.products || []).map((product: any) => ({
+                                id: product.id,
+                                name: product.name,
+                                price: product.price,
+                                originalPrice: product.mrp || product.price,
+                                image: product.images?.[0] || assets.essence,
+                                rating: product.ai_popularity_score || 4.5,
+                                badge: "Popular",
+                                wholesalePrice: product.b2b_wholesale_price || Math.floor(product.price * 0.6),
+                                minOrder: product.b2b_moq || 5,
+                                description: product.description || "Premium Korean cosmetics product",
+                                keyBenefits: [],
+                                skinConcerns: "",
+                                skinTypes: "All skin types",
+                                texture: "",
+                                keyIngredients: product.ingredients || "",
+                                brand: product.brand || "Korean Brand",
+                                size: ""
+                            }))
+                            setFeaturedProducts(fallbackMappedProducts)
+                        } else {
+                            setFeaturedProducts(mappedProducts)
+                        }
+                    } else {
+                        setFeaturedProducts(mappedProducts)
+                    }
+                } else {
+                    setError('Failed to fetch products')
+                }
+            } catch (err) {
+                console.error('Failed to fetch featured products:', err)
+                setError('Failed to fetch products')
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        fetchFeaturedProducts()
+    }, [])
 
     const categories = [
         { name: "Skincare", icon: "🧴", color: "bg-pink-100" },
@@ -153,6 +183,8 @@ const Hero = () => {
                                     <Image 
                                         src={assets.essence}
                                         alt="Premium Korean Cosmetics"
+                                        width={400}
+                                        height={400}
                                         className='w-full h-full object-cover'
                                     />
                                 </div>
@@ -171,8 +203,17 @@ const Hero = () => {
                     </p>
                 </div>
 
-                <div className='grid md:grid-cols-2 lg:grid-cols-3 gap-8'>
-                    {featuredProducts.map((product) => (
+                {loading ? (
+                    <div className='flex justify-center py-12'>
+                        <div className='w-8 h-8 border-2 border-slate-200 border-t-slate-900 rounded-full animate-spin' />
+                    </div>
+                ) : error ? (
+                    <div className='text-center py-12 text-slate-600'>
+                        <p>{error}</p>
+                    </div>
+                ) : (
+                    <div className='grid md:grid-cols-2 lg:grid-cols-3 gap-8'>
+                        {featuredProducts.map((product) => (
                         <Link key={product.id} href={`/product/${product.id}`} className='group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden block'>
                             <div className='relative'>
                                 <div className='absolute top-4 left-4 z-10'>
@@ -184,7 +225,9 @@ const Hero = () => {
                                     <Image 
                                         src={product.image} 
                                         alt={product.name}
-                                        className='w-full h-full object-contain group-hover:scale-105 transition-transform duration-300'
+                                        width={300}
+                                        height={300}
+                                        className='w-full h-full object-cover group-hover:scale-105 transition-transform duration-300'
                                     />
                                 </div>
                             </div>
@@ -233,14 +276,15 @@ const Hero = () => {
                                     <button onClick={() => window.location.href = `/product/${product.id}?type=retail`} className='flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white py-2 rounded-lg hover:from-pink-600 hover:to-rose-600 transition-colors text-sm font-medium'>
                                         Buy Retail
                                     </button>
-                                    <button onClick={() => window.location.href = `/product/${product.id}?type=b2b`} className='flex-1 border border-pink-300 text-pink-700 py-2 rounded-lg hover:bg-pink-50 transition-colors text-sm font-medium'>
+                                    <button onClick={() => handleB2BClick(product.id)} className='flex-1 border border-pink-300 text-pink-700 py-2 rounded-lg hover:bg-pink-50 transition-colors text-sm font-medium'>
                                         B2B Order
                                     </button>
                                 </div>
                             </div>
                         </Link>
                     ))}
-                </div>
+                    </div>
+                )}
             </div>
 
             {/* Categories - Continuous Carousel */}

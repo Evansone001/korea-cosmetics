@@ -13,22 +13,23 @@ const ProductCard = ({ product }: ProductCardProps) => {
     const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || 'KShs'
 
     // calculate the average rating of the product
-    const avgRating = product.rating.length > 0
-        ? Math.round(product.rating.reduce((acc, curr) => acc + curr.rating, 0) / product.rating.length * 10) / 10
+    const rating = product.rating || [];
+    const avgRating = rating.length > 0
+        ? Math.round(rating.reduce((acc: number, curr: any) => acc + curr.rating, 0) / rating.length * 10) / 10
         : 0;
 
     // Generate badge based on product properties
     const getBadge = () => {
-        if (product.rating.length > 50) return { text: 'Best Seller', class: 'from-pink-500 to-rose-500' };
-        if (new Date(product.createdAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)) return { text: 'New Arrival', class: 'from-purple-500 to-indigo-500' };
-        if (product.price < product.mrp * 0.7) return { text: 'Hot Deal', class: 'from-orange-500 to-red-500' };
+        if (rating.length > 50) return { text: 'Best Seller', class: 'from-pink-500 to-rose-500' };
+        if (product.createdAt && new Date(product.createdAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)) return { text: 'New Arrival', class: 'from-purple-500 to-indigo-500' };
+        if (product.mrp && product.price < product.mrp * 0.7) return { text: 'Hot Deal', class: 'from-orange-500 to-red-500' };
         return null;
     };
 
     const badge = getBadge();
 
     // Calculate savings percentage
-    const savingsPercent = Math.round(((product.mrp - product.price) / product.mrp) * 100);
+    const savingsPercent = product.mrp ? Math.round(((product.mrp - product.price) / product.mrp) * 100) : 0;
 
     // Wholesale price calculation (if not defined, estimate 60% of retail)
     const wholesalePrice = product.price * 0.6;
@@ -51,13 +52,19 @@ const ProductCard = ({ product }: ProductCardProps) => {
                     </div>
                 )}
                 <div className='aspect-square bg-gradient-to-br from-pink-50 to-rose-50 p-6 flex items-center justify-center overflow-hidden'>
-                    <Image
-                        src={product.images[0]}
-                        alt={product.name}
-                        width={400}
-                        height={400}
-                        className='w-full h-full object-contain group-hover:scale-110 transition-transform duration-500'
-                    />
+                    {product.images && product.images.length > 0 ? (
+                        <Image
+                            src={product.images[0]}
+                            alt={product.name}
+                            width={400}
+                            height={400}
+                            className='w-full h-full object-contain group-hover:scale-110 transition-transform duration-500'
+                        />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center text-slate-400">
+                            <span className="text-4xl">📦</span>
+                        </div>
+                    )}
                 </div>
             </Link>
 
@@ -89,7 +96,7 @@ const ProductCard = ({ product }: ProductCardProps) => {
                             />
                         ))}
                     </div>
-                    <span className='text-xs text-slate-500'>({product.rating.length})</span>
+                    <span className='text-xs text-slate-500'>({rating.length})</span>
                     <span className='text-xs font-medium text-slate-700 ml-1'>{avgRating > 0 ? avgRating.toFixed(1) : '0.0'}</span>
                 </div>
 

@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
       order: purchase,
       paymentInstructions: {
         method: 'bank_transfer',
-        accountName: 'KoreaBeauty Wholesale',
+        accountName: 'KoreaCosmetics Wholesale',
         accountNumber: '****1234',
         reference: purchase.id,
         amount: total,

@@ -1,33 +1,45 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
-  Package, 
-  Search, 
+import {
+  Package,
+  Search,
   Filter,
   Edit2,
   Trash2,
   Eye,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  Plus,
+  Minus
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { apiClient } from '@/lib/api-client';
 
 interface StoreProduct {
   id: string;
+  product_id: string;
   name: string;
+  product_name: string;
   description: string;
+  store_product_name?: string;
+  store_description?: string;
   price: number;
-  mrp?: number;
+  cost_price?: number;
   category: string;
-  brand: string;
+  brand?: string;
   images: string[];
-  stock: number;
-  sold: number;
-  status: 'active' | 'inactive' | 'out_of_stock';
+  product_image?: string;
+  stock_quantity: number;
+  purchased_quantity?: number;
+  sold_quantity?: number;
+  reorder_level?: number;
+  status: 'draft' | 'pending' | 'active' | 'inactive' | 'archived';
+  in_stock?: boolean;
   createdAt: string;
+  updated_at?: string;
 }
 
 export default function ManageProductPage() {
@@ -35,14 +47,16 @@ export default function ManageProductPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('');
+  const [editingProduct, setEditingProduct] = useState<StoreProduct | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    price: 0,
+    reorder_level: 5,
+    store_product_name: '',
+    store_description: ''
+  });
 
   const categories = ['Skincare', 'Makeup', 'Haircare', 'Bodycare', 'Fragrance'];
-  const statuses = [
-    { value: 'active', label: 'Active', color: 'bg-green-100 text-green-700' },
-    { value: 'inactive', label: 'Inactive', color: 'bg-slate-100 text-slate-700' },
-    { value: 'out_of_stock', label: 'Out of Stock', color: 'bg-red-100 text-red-700' }
-  ];
 
   useEffect(() => {
     fetchStoreProducts();
@@ -50,17 +64,33 @@ export default function ManageProductPage() {
 
   const fetchStoreProducts = async () => {
     try {
-      const response = await fetch('/api/store/products');
-      const data = await response.json();
-
-      if (response.ok) {
-        setProducts(data.products || []);
-      } else {
-        toast.error(data.error || 'Failed to fetch products');
-        // Fallback to empty array for demo
-        setProducts([]);
-      }
+      const response = await apiClient.getInventory({ limit: 100 });
+      const mappedProducts: StoreProduct[] = (response.inventory || []).map(p => ({
+        id: p.product_id,
+        product_id: p.product_id,
+        name: p.store_product_name || p.product_name || 'Unknown',
+        product_name: p.product_name || 'Unknown',
+        description: p.store_description || '',
+        store_product_name: p.store_product_name,
+        store_description: p.store_description,
+        price: p.price,
+        cost_price: p.cost_price,
+        category: p.category || 'Uncategorized',
+        brand: p.category || '',
+        images: p.product_image ? [p.product_image] : [],
+        product_image: p.product_image,
+        stock_quantity: p.stock_quantity || 0,
+        purchased_quantity: 0,
+        sold_quantity: 0,
+        reorder_level: p.reorder_level || 5,
+        status: 'active',
+        in_stock: p.stock_quantity > 0,
+        createdAt: p.updated_at || new Date().toISOString(),
+        updated_at: p.updated_at,
+      }));
+      setProducts(mappedProducts);
     } catch (error) {
+      console.error('Failed to fetch products:', error);
       toast.error('Failed to load products');
       setProducts([]);
     } finally {
@@ -68,45 +98,83 @@ export default function ManageProductPage() {
     }
   };
 
-  const toggleProductStatus = async (productId: string, newStatus: 'active' | 'inactive') => {
-    try {
-      const response = await fetch(`/api/store/products/${productId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      });
+  const handleDeleteProduct = async (productId: string) => {
+    if (!confirm('Are you sure you want to remove this product from your store?')) return;
 
-      if (response.ok) {
-        toast.success(`Product ${newStatus === 'active' ? 'activated' : 'deactivated'}`);
-        setProducts(prev =>
-          prev.map(p =>
-            p.id === productId ? { ...p, status: newStatus } : p
-          )
-        );
-      } else {
-        toast.error('Failed to update product');
-      }
+    try {
+      await apiClient.deleteProduct(productId);
+      toast.success('Product removed from store');
+      setProducts(prev => prev.filter(p => p.id !== productId));
     } catch (error) {
-      toast.error('Failed to update product');
+      console.error('Failed to delete product:', error);
+      toast.error('Failed to remove product');
     }
   };
 
-  const deleteProduct = async (productId: string) => {
-    if (!confirm('Are you sure you want to remove this product from your store?')) return;
-    
-    try {
-      const response = await fetch(`/api/store/products/${productId}`, {
-        method: 'DELETE',
-      });
+  const adjustStock = async (productId: string, adjustment: number) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
 
-      if (response.ok) {
-        toast.success('Product removed from store');
-        setProducts(prev => prev.filter(p => p.id !== productId));
-      } else {
-        toast.error('Failed to remove product');
-      }
+    const newStock = Math.max(0, product.stock_quantity + adjustment);
+
+    try {
+      await apiClient.updateStock(productId, newStock);
+      toast.success(`Stock adjusted to ${newStock}`);
+      setProducts(prev =>
+        prev.map(p =>
+          p.id === productId ? { ...p, stock_quantity: newStock } : p
+        )
+      );
     } catch (error) {
-      toast.error('Failed to remove product');
+      console.error('Failed to adjust stock:', error);
+      toast.error('Failed to adjust stock');
+    }
+  };
+
+  const openEditModal = (product: StoreProduct) => {
+    setEditingProduct(product);
+    setEditForm({
+      price: product.price,
+      reorder_level: product.reorder_level || 5,
+      store_product_name: product.store_product_name || '',
+      store_description: product.store_description || ''
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const closeEditModal = () => {
+    setEditingProduct(null);
+    setIsEditModalOpen(false);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingProduct) return;
+
+    try {
+      await apiClient.updateStoreProduct(editingProduct.id, {
+        price: editForm.price,
+        reorder_level: editForm.reorder_level,
+        store_product_name: editForm.store_product_name || undefined,
+        store_description: editForm.store_description || undefined
+      });
+      toast.success('Product updated successfully');
+      setProducts(prev =>
+        prev.map(p =>
+          p.id === editingProduct.id ? {
+            ...p,
+            price: editForm.price,
+            reorder_level: editForm.reorder_level,
+            store_product_name: editForm.store_product_name || undefined,
+            store_description: editForm.store_description || undefined,
+            name: editForm.store_product_name || p.name,
+            description: editForm.store_description || p.description
+          } : p
+        )
+      );
+      closeEditModal();
+    } catch (error) {
+      console.error('Failed to update product:', error);
+      toast.error('Failed to update product');
     }
   };
 
@@ -114,14 +182,13 @@ export default function ManageProductPage() {
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          product.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = !selectedCategory || product.category === selectedCategory;
-    const matchesStatus = !selectedStatus || product.status === selectedStatus;
-    
-    return matchesSearch && matchesCategory && matchesStatus;
+
+    return matchesSearch && matchesCategory;
   });
 
   const activeProducts = products.filter(p => p.status === 'active').length;
-  const outOfStockProducts = products.filter(p => p.stock === 0).length;
-  const totalSold = products.reduce((acc, p) => acc + p.sold, 0);
+  const outOfStockProducts = products.filter(p => p.stock_quantity === 0).length;
+  const totalSold = products.reduce((acc, p) => acc + (p.sold_quantity || 0), 0);
 
   if (loading) {
     return (
@@ -215,16 +282,6 @@ export default function ManageProductPage() {
           </div>
           <div className="flex gap-3">
             <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-500 bg-white"
-            >
-              <option value="">All Status</option>
-              {statuses.map(s => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
-            <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
               className="border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-pink-500 bg-white"
@@ -249,7 +306,6 @@ export default function ManageProductPage() {
                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-700">Price</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-700">Stock</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-700">Sold</th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-slate-700">Status</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-700">Actions</th>
               </tr>
             </thead>
@@ -284,35 +340,40 @@ export default function ManageProductPage() {
                   <td className="px-6 py-4">
                     <div>
                       <span className="font-medium text-slate-900">${product.price}</span>
-                      {product.mrp && (
-                        <span className="text-sm text-slate-400 line-through ml-2">${product.mrp}</span>
-                      )}
                     </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`text-sm font-medium ${
-                      product.stock === 0 ? 'text-red-600' : 
-                      product.stock < 10 ? 'text-amber-600' : 'text-green-600'
-                    }`}>
-                      {product.stock}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-slate-600">{product.sold}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                      statuses.find(s => s.value === product.status)?.color || 'bg-slate-100 text-slate-700'
-                    }`}>
-                      {statuses.find(s => s.value === product.status)?.label || product.status}
-                    </span>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => toggleProductStatus(product.id, product.status === 'active' ? 'inactive' : 'active')}
-                        className="p-2 text-slate-600 hover:text-pink-600 hover:bg-pink-50 rounded-lg transition-colors"
-                        title={product.status === 'active' ? 'Deactivate' : 'Activate'}
+                        onClick={() => adjustStock(product.id, -1)}
+                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        disabled={product.stock_quantity === 0}
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <span className={`text-sm font-medium w-12 text-center ${
+                        product.stock_quantity === 0 ? 'text-red-600' :
+                        product.stock_quantity < (product.reorder_level || 5) ? 'text-amber-600' : 'text-green-600'
+                      }`}>
+                        {product.stock_quantity}
+                      </span>
+                      <button
+                        onClick={() => adjustStock(product.id, 1)}
+                        className="p-1 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="text-sm text-slate-600">{product.sold_quantity || 0}</span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openEditModal(product)}
+                        className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Edit Product"
                       >
                         <Edit2 size={18} />
                       </button>
@@ -325,7 +386,7 @@ export default function ManageProductPage() {
                         <Eye size={18} />
                       </Link>
                       <button
-                        onClick={() => deleteProduct(product.id)}
+                        onClick={() => handleDeleteProduct(product.id)}
                         className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         title="Remove from Store"
                       >
@@ -343,18 +404,18 @@ export default function ManageProductPage() {
           <div className="text-center py-12">
             <Package className="w-16 h-16 text-slate-200 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-slate-900 mb-2">
-              {searchQuery || selectedCategory || selectedStatus
+              {searchQuery || selectedCategory
                 ? 'No products match your filters'
                 : 'No products in your store yet'
               }
             </h3>
             <p className="text-slate-500 mb-4">
-              {searchQuery || selectedCategory || selectedStatus
+              {searchQuery || selectedCategory
                 ? 'Try adjusting your search or filters'
                 : 'Go to the catalog to add products to your store'
               }
             </p>
-            {!searchQuery && !selectedCategory && !selectedStatus && (
+            {!searchQuery && !selectedCategory && (
               <Link
                 href="/store/catalog"
                 className="inline-flex items-center gap-2 bg-pink-500 text-white px-4 py-2 rounded-lg hover:bg-pink-600 transition-colors"
@@ -366,6 +427,83 @@ export default function ManageProductPage() {
           </div>
         )}
       </div>
+
+      {/* Edit Product Modal */}
+      {isEditModalOpen && editingProduct && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-4">Edit Product</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Original Product Name</label>
+                <p className="text-slate-900">{editingProduct.product_name}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Custom Product Name (Optional)</label>
+                <input
+                  type="text"
+                  value={editForm.store_product_name}
+                  onChange={(e) => setEditForm({ ...editForm, store_product_name: e.target.value })}
+                  placeholder="Override product name for your store"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
+                />
+                <p className="text-xs text-slate-500 mt-1">Leave empty to use original name</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Custom Description (Optional)</label>
+                <textarea
+                  value={editForm.store_description}
+                  onChange={(e) => setEditForm({ ...editForm, store_description: e.target.value })}
+                  placeholder="Add custom description for this product in your store"
+                  rows={6}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 resize-none"
+                />
+                <p className="text-xs text-slate-500 mt-1">Leave empty to use catalog description</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Price ($)</label>
+                <input
+                  type="number"
+                  value={editForm.price}
+                  onChange={(e) => setEditForm({ ...editForm, price: parseFloat(e.target.value) })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  min={0}
+                  step={0.01}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Low Stock Alert Level</label>
+                <input
+                  type="number"
+                  value={editForm.reorder_level}
+                  onChange={(e) => setEditForm({ ...editForm, reorder_level: parseInt(e.target.value) })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  min={1}
+                />
+                <p className="text-xs text-slate-500 mt-1">Alert when stock falls below this level</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Current Stock</label>
+                <p className="text-slate-900">{editingProduct.stock_quantity} units</p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={closeEditModal}
+                className="flex-1 px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                className="flex-1 px-4 py-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600 transition-colors"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

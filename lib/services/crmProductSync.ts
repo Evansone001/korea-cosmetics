@@ -1,4 +1,4 @@
-// Service to pull products FROM external CRM into KoreaBeauty Hub
+// Service to pull products FROM external CRM into KoreaCosmetics' Hub
 // Admin uses this to sync the master product catalog
 
 import { CRMConfig } from './crmIntegration';
@@ -87,7 +87,7 @@ class CRMProductSyncService {
 
     for (const product of products) {
       try {
-        // Check if product already exists in KoreaBeauty Hub
+        // Check if product already exists in KoreaCosmetics' Hub
         const existing = await this.findExistingProduct(product.id);
 
         if (existing) {
@@ -118,7 +118,7 @@ class CRMProductSyncService {
   }
 
   private async createProduct(product: CRMProduct): Promise<void> {
-    // Create product in KoreaBeauty Hub database
+    // Create product in KoreaCosmetics' Hub database
     // Assign to admin as the supplier
     console.log('Creating product:', product.name);
   }

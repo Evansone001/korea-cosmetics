@@ -112,7 +112,7 @@ async function testCRMConnection(config: CRMConfig): Promise<{ success: boolean;
       body: JSON.stringify({
         event: 'test',
         timestamp: new Date().toISOString(),
-        data: { message: 'Connection test from KoreaBeauty Hub' },
+        data: { message: 'Connection test from KoreaCosmetics Hub' },
       }),
     });
 
