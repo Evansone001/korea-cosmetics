@@ -36,6 +36,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(data, { status: response.status });
     }
 
+    // Ensure user object has name field
+    if (data.user && !data.user.name && (data.user.first_name || data.user.last_name)) {
+      data.user.name = `${data.user.first_name || ''} ${data.user.last_name || ''}`.trim();
+    }
+
     return NextResponse.json(data);
   } catch (error) {
     console.error('Auth me error:', error);

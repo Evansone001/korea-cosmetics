@@ -57,11 +57,13 @@ export async function POST(request: Request) {
       user: {
         id: user.id,
         email: user.email,
-        name: user.name,
+        name: user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim(),
         role: user.role,
         email_verified: user.email_verified,
         auth_provider: user.auth_provider,
         last_login_method: user.last_login_method,
+        first_name: user.first_name,
+        last_name: user.last_name,
       },
     });
 
