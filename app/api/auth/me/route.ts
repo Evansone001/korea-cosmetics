@@ -5,17 +5,18 @@ const FLASK_BACKEND_URL = process.env.FLASK_BACKEND_URL || 'http://127.0.0.1:500
 // GET - Get current user information
 export async function GET(request: NextRequest) {
   try {
-    // Get auth token from request
+    // Get auth token from cookie
     const cookie = request.headers.get('cookie');
+    const authToken = cookie?.match(/auth-token=([^;]+)/)?.[1];
 
-    // Forward request to backend with cookies
+    // Forward request to backend with Authorization header
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
 
-    // Forward the cookie header if present
-    if (cookie) {
-      headers['Cookie'] = cookie;
+    // Add JWT token to Authorization header if present
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
     }
 
     const response = await fetch(`${FLASK_BACKEND_URL}/api/auth/me`, {
