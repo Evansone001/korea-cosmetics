@@ -7,32 +7,53 @@ import { ArrowRightIcon } from "lucide-react"
 import AdminNavbar from "./AdminNavbar"
 import AdminSidebar from "./AdminSidebar"
 import { useAppSelector, useAppDispatch } from "@/lib/hooks"
-import { setUser, setLoading, logout } from "@/lib/features/auth/authSlice"
+import { setUser, setLoading } from "@/lib/features/auth/authSlice"   // ✅ correct
 
-interface AdminLayoutProps {
-    children: React.ReactNode;
-}
-
-const AdminLayout = ({ children }: AdminLayoutProps) => {
+const AdminLayout = ({ children }: { children: React.ReactNode }) => {
     const router = useRouter()
     const dispatch = useAppDispatch()
     const authState = useAppSelector(state => state?.auth || { user: null, isAuthenticated: false, isLoading: true })
     const { user, isAuthenticated, isLoading } = authState
     const [isAuthorized, setIsAuthorized] = useState(false)
+    const [fetchDone, setFetchDone] = useState(false)
 
-    // Check authorization based on role
+    // Fetch user from cookie if Redux is empty
     useEffect(() => {
-        console.log('[AdminLayout] Auth check - user:', user?.role, 'isAuthenticated:', isAuthenticated, 'isLoading:', isLoading)
+        const fetchUser = async () => {
+            // If we already have a user or already fetched, stop
+            if (user || fetchDone) return
+            try {
+                console.log('[AdminLayout] Fetching user from /api/auth/me')
+                const res = await fetch('/api/auth/me', { credentials: 'include' })
+                if (res.ok) {
+                    const data = await res.json()
+                    console.log('[AdminLayout] User fetched:', data.user)
+                    dispatch(setUser(data.user))
+                } else {
+                    console.log('[AdminLayout] /api/auth/me returned', res.status)
+                    dispatch(setUser(null))
+                }
+            } catch (err) {
+                console.error('[AdminLayout] Fetch error:', err)
+                dispatch(setUser(null))
+            } finally {
+                dispatch(setLoading(false))
+                setFetchDone(true)
+            }
+        }
+        fetchUser()
+    }, [user, fetchDone, dispatch])
+
+    // Update authorization when user changes
+    useEffect(() => {
         if (user && (user.role === 'admin' || user.role === 'super_admin')) {
-            console.log('[AdminLayout] User is admin/super_admin - authorized')
             setIsAuthorized(true)
         } else {
-            console.log('[AdminLayout] User not authorized or not loaded yet')
             setIsAuthorized(false)
         }
-    }, [user, isAuthenticated, isLoading])
+    }, [user])
 
-    // Redirect if not authenticated after loading
+    // Redirect to login if not authenticated after loading
     useEffect(() => {
         if (!isLoading && !isAuthenticated) {
             router.push('/login?redirect=/admin')
@@ -47,7 +68,6 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     }
 
     if (!isAuthenticated) {
-        console.log('[AdminLayout] Not authenticated, showing login prompt')
         return (
             <div className="min-h-screen flex flex-col items-center justify-center text-center px-6 bg-slate-50">
                 <div className="bg-white rounded-2xl shadow-xl p-10 max-w-md w-full">
@@ -65,7 +85,6 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     }
 
     if (!isAuthorized) {
-        console.log('[AdminLayout] Not authorized, user role:', user?.role)
         return (
             <div className="min-h-screen flex flex-col items-center justify-center text-center px-6 bg-slate-50">
                 <div className="bg-white rounded-2xl shadow-xl p-10 max-w-md w-full">
