@@ -15,10 +15,11 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
     hasRunRef.current = true
 
     const initializeAuth = async () => {
+      console.log('[StoreProvider] Starting auth initialization, current user:', user?.email || 'none')
+      
       // Skip if user already exists in Redux (loaded from localStorage or set during login)
       if (user) {
         console.log('[StoreProvider] User already in Redux (from localStorage), skipping /api/auth/me call')
-        // Make sure loading is false since we have a user
         dispatch(setLoading(false))
         return
       }
@@ -52,7 +53,7 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
     }
 
     initializeAuth()
-  }, [dispatch, user])
+  }, [])
 
   return <>{children}</>
 }
