@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
 import { assets } from "@/assets/assets";
-import { logout } from "@/lib/features/auth/authSlice";
+import { logout, setUser } from "@/lib/features/auth/authSlice";
 
 const Navbar = () => {
     const router = useRouter();
@@ -19,6 +19,30 @@ const Navbar = () => {
     const { user, isAuthenticated } = useAppSelector(state => state?.auth || { user: null, isAuthenticated: false, isLoading: true })
     const profileRef = useRef<HTMLDivElement>(null)
     const deliveryRef = useRef<HTMLDivElement>(null)
+
+    // Restore auth state from server on mount
+    useEffect(() => {
+        const restoreAuth = async () => {
+            if (!isAuthenticated) {
+                try {
+                    const response = await fetch('/api/auth/me', {
+                        credentials: 'include'
+                    })
+                    if (response.ok) {
+                        const data = await response.json()
+                        if (data.user) {
+                            // User is logged in, update Redux state
+                            dispatch(setUser(data.user))
+                            console.log('[Navbar] Restored user from /api/auth/me:', data.user.name)
+                        }
+                    }
+                } catch (error) {
+                    console.error('[Navbar] Failed to restore auth:', error)
+                }
+            }
+        }
+        restoreAuth()
+    }, [isAuthenticated, dispatch])
 
     // Sample African countries with flags
     const countries = [
