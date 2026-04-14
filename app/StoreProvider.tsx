@@ -2,15 +2,22 @@
 import { useRef, useEffect } from 'react'
 import { Provider } from 'react-redux'
 import { makeStore } from '../lib/store'
-import { useAppDispatch } from '../lib/hooks'
+import { useAppDispatch, useAppSelector } from '../lib/hooks'
 import { setUser, setLoading } from '../lib/features/auth/authSlice'
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
   const dispatch = useAppDispatch()
+  const user = useAppSelector(state => state.auth.user)
 
   useEffect(() => {
     const initializeAuth = async () => {
-      // Always check /api/auth/me - browser will send httpOnly cookie automatically
+      // Skip if user already exists in Redux (set during login)
+      if (user) {
+        console.log('[StoreProvider] User already in Redux, skipping /api/auth/me call')
+        return
+      }
+
+      // Check /api/auth/me - browser will send httpOnly cookie automatically
       console.log('[StoreProvider] Initializing auth, calling /api/auth/me')
       try {
         dispatch(setLoading(true))
@@ -39,7 +46,7 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
     }
 
     initializeAuth()
-  }, [dispatch])
+  }, [dispatch, user])
 
   return <>{children}</>
 }
