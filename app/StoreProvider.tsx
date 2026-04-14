@@ -9,8 +9,12 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
   const dispatch = useAppDispatch()
   const user = useAppSelector(state => state.auth.user)
   const hasRunRef = useRef(false)
+  
+  // Log on every render to verify component is mounting
+  console.log('[StoreProvider] AuthInitializer rendering, user:', user?.email || 'none', 'hasRun:', hasRunRef.current)
 
   useEffect(() => {
+    console.log('[StoreProvider] useEffect running, hasRun:', hasRunRef.current)
     if (hasRunRef.current) return
     hasRunRef.current = true
 
