@@ -7,7 +7,7 @@ import { ArrowRightIcon } from "lucide-react"
 import AdminNavbar from "./AdminNavbar"
 import AdminSidebar from "./AdminSidebar"
 import { useAppSelector, useAppDispatch } from "@/lib/hooks"
-import { setUser, setLoading } from "@/lib/features/auth/authSlice"
+import { setLoading } from "@/lib/features/auth/authSlice"
 
 interface AdminLayoutProps {
     children: React.ReactNode;
@@ -21,44 +21,15 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     const [isAuthorized, setIsAuthorized] = useState(false)
 
     useEffect(() => {
-        const checkAuth = async () => {
-            console.log('[AdminLayout] Checking auth state')
-            
-            // Check if user already in Redux
-            if (user && user.role === 'admin') {
-                console.log('[AdminLayout] Admin user in Redux - authorized')
-                setIsAuthorized(true)
-                dispatch(setLoading(false))
-                return
-            }
-
-            // Try to restore user from server (cookie is httpOnly, can't read client-side)
-            console.log('[AdminLayout] No user in Redux, calling /api/auth/me')
-            try {
-                const response = await fetch('/api/auth/me', {
-                    credentials: 'include' // Important: sends cookies
-                })
-                
-                if (response.ok) {
-                    const data = await response.json()
-                    if (data.user && data.user.role === 'admin') {
-                        console.log('[AdminLayout] Restored admin from /api/auth/me')
-                        dispatch(setUser(data.user))
-                        setIsAuthorized(true)
-                        dispatch(setLoading(false))
-                        return
-                    }
-                }
-            } catch (error) {
-                console.error('[AdminLayout] /api/auth/me failed:', error)
-            }
-
-            console.log('[AdminLayout] No admin user found - redirecting')
-            dispatch(setLoading(false))
+        // Just check if user is admin from Redux state
+        // StoreProvider already fetches /api/auth/me on app load
+        if (user && user.role === 'admin') {
+            console.log('[AdminLayout] Admin user in Redux - authorized')
+            setIsAuthorized(true)
+        } else {
+            setIsAuthorized(false)
         }
-
-        checkAuth()
-    }, [dispatch, user])
+    }, [user])
 
     useEffect(() => {
         if (!isLoading && !isAuthenticated) {
