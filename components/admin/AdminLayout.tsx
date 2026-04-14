@@ -22,7 +22,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
 
     useEffect(() => {
         const checkAuth = async () => {
-            console.log('[AdminLayout] Demo mode - checking Redux state')
+            console.log('[AdminLayout] Checking auth state')
             
             // Check if user already in Redux
             if (user && user.role === 'admin') {
@@ -32,35 +32,25 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
                 return
             }
 
-            // Try to restore user from cookie (demo mode - simple decode)
-            console.log('[AdminLayout] No user in Redux, checking cookie')
+            // Try to restore user from server (cookie is httpOnly, can't read client-side)
+            console.log('[AdminLayout] No user in Redux, calling /api/auth/me')
             try {
-                const cookies = document.cookie.split(';')
-                const authCookie = cookies.find(c => c.trim().startsWith('auth-token='))
+                const response = await fetch('/api/auth/me', {
+                    credentials: 'include' // Important: sends cookies
+                })
                 
-                if (authCookie) {
-                    const token = authCookie.split('=')[1]
-                    // Simple decode for demo - get payload
-                    const payload = JSON.parse(atob(token.split('.')[1]))
-                    
-                    if (payload.role === 'admin') {
-                        console.log('[AdminLayout] Restored admin from cookie')
-                        dispatch(setUser({
-                            id: payload.sub,
-                            email: payload.email,
-                            name: payload.name,
-                            role: payload.role,
-                            email_verified: false,
-                            auth_provider: null,
-                            last_login_method: "email"
-                        }))
+                if (response.ok) {
+                    const data = await response.json()
+                    if (data.user && data.user.role === 'admin') {
+                        console.log('[AdminLayout] Restored admin from /api/auth/me')
+                        dispatch(setUser(data.user))
                         setIsAuthorized(true)
                         dispatch(setLoading(false))
                         return
                     }
                 }
             } catch (error) {
-                console.error('[AdminLayout] Cookie decode failed:', error)
+                console.error('[AdminLayout] /api/auth/me failed:', error)
             }
 
             console.log('[AdminLayout] No admin user found - redirecting')
