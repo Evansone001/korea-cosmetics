@@ -22,10 +22,27 @@ interface AuthState {
   socialAuthError: string | null
 }
 
+// Load user from localStorage on init (for SSR safety, check if window exists)
+const loadUserFromStorage = (): User | null => {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('auth-user')
+    if (stored) {
+      try {
+        return JSON.parse(stored)
+      } catch {
+        return null
+      }
+    }
+  }
+  return null
+}
+
+const persistedUser = loadUserFromStorage()
+
 const initialState: AuthState = {
-  user: null,
-  isAuthenticated: false,
-  isLoading: true,
+  user: persistedUser,
+  isAuthenticated: !!persistedUser,
+  isLoading: !persistedUser, // If no persisted user, start loading
   isSocialAuthLoading: false,
   socialAuthError: null,
 }
@@ -40,6 +57,14 @@ const authSlice = createSlice({
       state.isLoading = false
       state.isSocialAuthLoading = false
       state.socialAuthError = null
+      // Persist to localStorage
+      if (typeof window !== 'undefined') {
+        if (action.payload) {
+          localStorage.setItem('auth-user', JSON.stringify(action.payload))
+        } else {
+          localStorage.removeItem('auth-user')
+        }
+      }
     },
     logout: (state) => {
       state.user = null
@@ -47,6 +72,11 @@ const authSlice = createSlice({
       state.isLoading = false
       state.isSocialAuthLoading = false
       state.socialAuthError = null
+      // Clear localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('auth-user')
+        localStorage.removeItem('auth-token')
+      }
     },
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.isLoading = action.payload

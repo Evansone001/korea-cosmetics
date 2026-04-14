@@ -11,16 +11,16 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const initializeAuth = async () => {
-      // Skip if user already exists in Redux (set during login)
+      // Skip if user already exists in Redux (loaded from localStorage or set during login)
       if (user) {
-        console.log('[StoreProvider] User already in Redux, skipping /api/auth/me call')
+        console.log('[StoreProvider] User already in Redux (from localStorage), skipping /api/auth/me call')
         // Make sure loading is false since we have a user
         dispatch(setLoading(false))
         return
       }
 
       // Check /api/auth/me - browser will send httpOnly cookie automatically
-      console.log('[StoreProvider] Initializing auth, calling /api/auth/me')
+      console.log('[StoreProvider] No persisted user, calling /api/auth/me')
       try {
         dispatch(setLoading(true))
         const response = await fetch('/api/auth/me', {
