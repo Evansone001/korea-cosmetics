@@ -7,27 +7,20 @@ export async function GET(request: NextRequest) {
   try {
     // Get auth token from request
     const cookie = request.headers.get('cookie');
-    let authToken = '';
-    
-    // Extract JWT from cookie
+
+    // Forward request to backend with cookies
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // Forward the cookie header if present
     if (cookie) {
-      const authMatch = cookie.match(/auth-token=([^;]+)/);
-      if (authMatch) {
-        authToken = authMatch[1];
-      }
+      headers['Cookie'] = cookie;
     }
 
-    if (!authToken) {
-      return NextResponse.json({ error: 'No auth token' }, { status: 401 });
-    }
-
-    // Forward request to backend
     const response = await fetch(`${FLASK_BACKEND_URL}/api/auth/me`, {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
-        'Content-Type': 'application/json',
-      },
+      headers,
     });
 
     const data = await response.json();
