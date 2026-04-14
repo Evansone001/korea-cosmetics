@@ -4,7 +4,7 @@ export interface User {
   id: string
   email: string
   name: string
-  role: 'customer' | 'seller' | 'admin'
+  role: 'customer' | 'seller' | 'admin' | 'super_admin'
   image?: string
   email_verified: boolean
   auth_provider: 'email' | 'google' | 'github' | null
