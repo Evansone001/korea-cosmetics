@@ -88,8 +88,8 @@ function LoginContent({ router, dispatch, redirect }: {
                 let finalRedirect = redirect
 
                 // Apply role-based redirect based on user's role
-                if (data.user?.role === 'admin') {
-                    // Admin users should go to admin dashboard unless redirecting to a non-dashboard page
+                if (data.user?.role === 'admin' || data.user?.role === 'super_admin') {
+                    // Admin and super_admin users should go to admin dashboard unless redirecting to a non-dashboard page
                     if (redirect === '/' || redirect === '/store') {
                         finalRedirect = '/admin'
                     }
