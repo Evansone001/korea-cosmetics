@@ -75,6 +75,7 @@ export async function POST(request: Request) {
       sameSite: 'lax',
       maxAge: 24 * 60 * 60,
       path: '/',
+      domain: '.koreacosmetics.top', // Work across subdomains
     });
 
     return response;

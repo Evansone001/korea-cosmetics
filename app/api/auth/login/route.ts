@@ -87,6 +87,7 @@ export async function POST(request: Request) {
       sameSite: 'lax',
       expires: expires,
       path: '/',
+      domain: '.koreacosmetics.top', // Work across subdomains
     });
     console.log('[Login API] Cookie set, secure:', isHttpsBackend);
 
@@ -112,6 +113,7 @@ export async function DELETE() {
     sameSite: 'strict',
     maxAge: 0,
     path: '/',
+    domain: '.koreacosmetics.top', // Work across subdomains
   });
 
   return response;
