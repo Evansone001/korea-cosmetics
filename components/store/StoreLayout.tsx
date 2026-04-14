@@ -7,7 +7,9 @@ import { ArrowRightIcon } from "lucide-react"
 import SellerNavbar from "./StoreNavbar"
 import SellerSidebar from "./StoreSidebar"
 import { useAppSelector, useAppDispatch } from "@/lib/hooks"
-import { setUser, setLoading, setAuthenticated } from "@/lib/features/auth/authSlice"
+import { setUser, setAuthenticated } from "@/lib/features/auth/authSlice"
+import toast from "react-hot-toast"
+import { apiClient } from "@/lib/api-client"
 
 interface StoreLayoutProps {
   children: ReactNode
@@ -23,81 +25,94 @@ interface StoreInfo {
 const StoreLayout = ({ children }: StoreLayoutProps) => {
   const router = useRouter()
   const dispatch = useAppDispatch()
-  const { user, isAuthenticated, isLoading } = useAppSelector(state => state?.auth || { user: null, isAuthenticated: false, isLoading: true })
+  const { user, isAuthenticated } = useAppSelector(state => state?.auth || { user: null, isAuthenticated: false })
+  const [localLoading, setLocalLoading] = useState(true)
   const [isAuthorized, setIsAuthorized] = useState(false)
   const [storeInfo, setStoreInfo] = useState<StoreInfo | null>(null)
 
+  const fetchStoreInfo = async () => {
+    try {
+      const response: any = await apiClient.getMyStore()
+      if (response && response.store) {
+        setStoreInfo({
+          id: response.store.id,
+          name: response.store.name,
+          username: response.store.username || response.store.id,
+          logo: response.store.logo || null,
+        })
+      }
+    } catch (error) {
+      console.log('[StoreLayout] No store found or error:', error)
+    }
+  }
+
+  // Fetch user from cookie if Redux is empty
   useEffect(() => {
     const checkAuth = async () => {
-      console.log('[StoreLayout] Demo mode - checking Redux state')
+      console.log('[StoreLayout] Checking auth state...')
       
-      // Check if user already in Redux
+      // If user already in Redux and has seller/admin role
       if (user && (user.role === 'seller' || user.role === 'admin')) {
         console.log('[StoreLayout] User in Redux - authorized')
         setIsAuthorized(true)
-        dispatch(setLoading(false))
-        setStoreInfo({
-          id: '1',
-          name: 'K-Beauty Store',
-          username: 'kbeauty-store',
-          logo: null,
-        })
+        setLocalLoading(false)
         return
       }
 
-      // Try to restore user from cookie (demo mode - simple decode)
-      console.log('[StoreLayout] No user in Redux, checking cookie')
-      try {
-        const cookies = document.cookie.split(';')
-        const authCookie = cookies.find(c => c.trim().startsWith('auth-token='))
-        
-        if (authCookie) {
-          const token = authCookie.split('=')[1]
-          // Simple decode for demo - get payload
-          const payload = JSON.parse(atob(token.split('.')[1]))
-          
-          if (payload.role === 'seller' || payload.role === 'admin') {
-            console.log('[StoreLayout] Restored user from cookie')
-            dispatch(setUser({
-              id: payload.sub,
-              email: payload.email,
-              name: payload.name,
-              role: payload.role,
-              email_verified: false,
-              auth_provider: null,
-              last_login_method: "email"
-            }))
-            dispatch(setAuthenticated(true))
-            setIsAuthorized(true)
-            dispatch(setLoading(false))
-            setStoreInfo({
-              id: '1',
-              name: 'K-Beauty Store',
-              username: 'kbeauty-store',
-              logo: null,
-            })
-            return
-          }
-        }
-      } catch (error) {
-        console.error('[StoreLayout] Cookie decode failed:', error)
+      // If we already have a user but role doesn't match, still stop loading
+      if (user && !(user.role === 'seller' || user.role === 'admin')) {
+        console.log('[StoreLayout] User role not seller/admin:', user.role)
+        setIsAuthorized(false)
+        setLocalLoading(false)
+        return
       }
 
-      console.log('[StoreLayout] No user found - redirecting')
-      dispatch(setLoading(false))
+      // No user in Redux, fetch from server
+      console.log('[StoreLayout] No user in Redux, fetching from /api/auth/me')
+      try {
+        const res = await fetch('/api/auth/me', { credentials: 'include' })
+        if (res.ok) {
+          const data = await res.json()
+          console.log('[StoreLayout] User fetched:', data.user)
+          if (data.user && (data.user.role === 'seller' || data.user.role === 'admin')) {
+            dispatch(setUser(data.user))
+            dispatch(setAuthenticated(true))
+            setIsAuthorized(true)
+          } else {
+            console.log('[StoreLayout] User role not seller/admin:', data.user?.role)
+            toast.error('You need seller privileges to access this area')
+            setIsAuthorized(false)
+          }
+        } else {
+          console.log('[StoreLayout] /api/auth/me returned', res.status)
+          setIsAuthorized(false)
+        }
+      } catch (err) {
+        console.error('[StoreLayout] Fetch error:', err)
+        setIsAuthorized(false)
+      } finally {
+        setLocalLoading(false)
+      }
     }
 
     checkAuth()
   }, [dispatch, user])
 
-  // Redirect to login if not authenticated
+  // Fetch store info when user becomes available and authorized
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (user && isAuthorized && !storeInfo) {
+      fetchStoreInfo()
+    }
+  }, [user, isAuthorized, storeInfo])
+
+  // Redirect to login if not authenticated after loading
+  useEffect(() => {
+    if (!localLoading && !isAuthenticated) {
       router.push('/login?redirect=/store')
     }
-  }, [isLoading, isAuthenticated, router])
+  }, [localLoading, isAuthenticated, router])
 
-  if (isLoading) {
+  if (localLoading) {
     return <Loading />
   }
 
