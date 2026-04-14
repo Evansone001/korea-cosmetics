@@ -12,21 +12,32 @@ import { setUser, setAuthenticated } from "@/lib/features/auth/authSlice"
 const AdminLayout = ({ children }: { children: React.ReactNode }) => {
     const router = useRouter()
     const dispatch = useAppDispatch()
-    const authState = useAppSelector(state => state?.auth || { user: null, isAuthenticated: false })
-    const { user, isAuthenticated } = authState
+    const authState = useAppSelector(state => state?.auth || { user: null, isAuthenticated: false, isLoading: true })
+    const { user, isAuthenticated, isLoading: reduxLoading } = authState
     const [isAuthorized, setIsAuthorized] = useState(false)
-    const [localLoading, setLocalLoading] = useState(true)   // local loading state
+    const [localLoading, setLocalLoading] = useState(true)
+    const isLoading = localLoading || reduxLoading
 
-    // Fetch user from cookie if Redux is empty
     useEffect(() => {
         const fetchUser = async () => {
+            // If user already exists in Redux, we are done
             if (user) {
                 setLocalLoading(false)
                 return
             }
+
+            // Create abort controller for timeout
+            const controller = new AbortController()
+            const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 seconds timeout
+
             try {
                 console.log('[AdminLayout] Fetching user from /api/auth/me')
-                const res = await fetch('/api/auth/me', { credentials: 'include' })
+                const res = await fetch('/api/auth/me', {
+                    credentials: 'include',
+                    signal: controller.signal,
+                })
+                clearTimeout(timeoutId)
+
                 if (res.ok) {
                     const data = await res.json()
                     console.log('[AdminLayout] User fetched:', data.user)
@@ -43,6 +54,7 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
                 setLocalLoading(false)
             }
         }
+
         fetchUser()
     }, [user, dispatch])
 
@@ -57,14 +69,14 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
 
     // Redirect to login if not authenticated after loading
     useEffect(() => {
-        if (!localLoading && !isAuthenticated) {
+        if (!isLoading && !isAuthenticated) {
             router.push('/login?redirect=/admin')
         }
-    }, [localLoading, isAuthenticated, router])
+    }, [isLoading, isAuthenticated, router])
 
-    console.log('[AdminLayout] Render check:', { localLoading, isAuthenticated, isAuthorized, userRole: user?.role })
+    console.log('[AdminLayout] Render check:', { isLoading, localLoading, reduxLoading, isAuthenticated, isAuthorized, userRole: user?.role })
 
-    if (localLoading) {
+    if (isLoading) {
         console.log('[AdminLayout] Showing Loading spinner')
         return <Loading />
     }

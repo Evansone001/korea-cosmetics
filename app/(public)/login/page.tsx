@@ -4,7 +4,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useAppDispatch } from '@/lib/hooks'
-import { setUser } from '@/lib/features/auth/authSlice'
+import { setUser, setAuthenticated } from '@/lib/features/auth/authSlice'
 import { assets } from '@/assets/assets'
 import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react'
 import SocialLoginButton from '@/components/auth/SocialLoginButton'
@@ -80,6 +80,7 @@ function LoginContent({ dispatch, redirect }: {
                 }
                 
                 dispatch(setUser(data.user))
+                dispatch(setAuthenticated(true))
                 
                 // Role-based redirect logic
                 let finalRedirect = redirect
