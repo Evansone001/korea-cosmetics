@@ -10,28 +10,22 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const initializeAuth = async () => {
-      // Check if auth token exists in localStorage
-      const token = localStorage.getItem('auth-token')
+      // Always check /api/auth/me - browser will send httpOnly cookie automatically
+      try {
+        dispatch(setLoading(true))
+        const response = await fetch('/api/auth/me', {
+          credentials: 'include',
+        })
 
-      if (token) {
-        try {
-          dispatch(setLoading(true))
-          const response = await fetch('/api/auth/me', {
-            credentials: 'include',
-          })
-
-          if (response.ok) {
-            const data = await response.json()
-            if (data.user) {
-              dispatch(setUser(data.user))
-            }
+        if (response.ok) {
+          const data = await response.json()
+          if (data.user) {
+            dispatch(setUser(data.user))
           }
-        } catch (error) {
-          console.error('Failed to initialize auth:', error)
-        } finally {
-          dispatch(setLoading(false))
         }
-      } else {
+      } catch (error) {
+        console.error('Failed to initialize auth:', error)
+      } finally {
         dispatch(setLoading(false))
       }
     }
