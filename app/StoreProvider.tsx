@@ -11,20 +11,28 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       // Always check /api/auth/me - browser will send httpOnly cookie automatically
+      console.log('[StoreProvider] Initializing auth, calling /api/auth/me')
       try {
         dispatch(setLoading(true))
         const response = await fetch('/api/auth/me', {
           credentials: 'include',
         })
 
+        console.log('[StoreProvider] /api/auth/me response:', response.status)
         if (response.ok) {
           const data = await response.json()
+          console.log('[StoreProvider] /api/auth/me data:', data)
           if (data.user) {
+            console.log('[StoreProvider] Setting user:', data.user.name)
             dispatch(setUser(data.user))
+          } else {
+            console.log('[StoreProvider] No user in response')
           }
+        } else {
+          console.log('[StoreProvider] /api/auth/me not ok:', response.status)
         }
       } catch (error) {
-        console.error('Failed to initialize auth:', error)
+        console.error('[StoreProvider] Failed to initialize auth:', error)
       } finally {
         dispatch(setLoading(false))
       }

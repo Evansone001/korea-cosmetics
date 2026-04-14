@@ -23,13 +23,15 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     useEffect(() => {
         // Just check if user is admin from Redux state
         // StoreProvider already fetches /api/auth/me on app load
+        console.log('[AdminLayout] Checking auth state:', { isLoading, isAuthenticated, userRole: user?.role })
         if (user && user.role === 'admin') {
             console.log('[AdminLayout] Admin user in Redux - authorized')
             setIsAuthorized(true)
         } else {
+            console.log('[AdminLayout] Not authorized:', { hasUser: !!user, role: user?.role })
             setIsAuthorized(false)
         }
-    }, [user])
+    }, [user, isLoading, isAuthenticated])
 
     useEffect(() => {
         if (!isLoading && !isAuthenticated) {
