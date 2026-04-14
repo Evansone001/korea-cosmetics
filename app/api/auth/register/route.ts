@@ -67,9 +67,11 @@ export async function POST(request: Request) {
       },
     });
 
+    // Only use secure cookies if backend is HTTPS (not HTTP)
+    const isHttpsBackend = FLASK_BACKEND_URL.startsWith('https://');
     response.cookies.set('auth-token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isHttpsBackend, // Only secure if backend is HTTPS
       sameSite: 'lax',
       maxAge: 24 * 60 * 60,
       path: '/',
