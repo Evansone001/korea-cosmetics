@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useAppDispatch } from '@/lib/hooks'
@@ -14,12 +14,10 @@ import { useSocialAuth } from '@/hooks/useSocialAuth'
 function LoginContentWithSearchParams() {
     const searchParams = useSearchParams()
     const redirect = searchParams.get('redirect') || '/'
-    const router = useRouter()
     const dispatch = useAppDispatch()
     
     return (
         <LoginContent 
-            router={router} 
             dispatch={dispatch} 
             redirect={redirect} 
         />
@@ -34,8 +32,7 @@ export default function Login() {
     )
 }
 
-function LoginContent({ router, dispatch, redirect }: { 
-    router: any, 
+function LoginContent({ dispatch, redirect }: { 
     dispatch: any, 
     redirect: string 
 }) {
@@ -107,11 +104,9 @@ function LoginContent({ router, dispatch, redirect }: {
                 
                 console.log('[Login] Redux dispatch complete, redirecting to:', finalRedirect)
                 
-                // Small delay to ensure Redux updates
-                setTimeout(() => {
-                    console.log('[Login] Executing redirect to:', finalRedirect)
-                    router.push(finalRedirect)
-                }, 100)
+                // Full page reload to ensure StoreProvider runs auth check
+                console.log('[Login] Executing full page redirect to:', finalRedirect)
+                window.location.href = finalRedirect
             } else {
                 console.log('[Login] Login failed:', data.error)
                 setError(data.error || 'Invalid email or password')
