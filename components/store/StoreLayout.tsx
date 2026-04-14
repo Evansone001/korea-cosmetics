@@ -51,8 +51,8 @@ const StoreLayout = ({ children }: StoreLayoutProps) => {
     const checkAuth = async () => {
       console.log('[StoreLayout] Checking auth state...')
       
-      // If user already in Redux and has seller/admin role
-      if (user && (user.role === 'seller' || user.role === 'admin')) {
+      // If user already in Redux and has seller/admin/super_admin role
+      if (user && (user.role === 'seller' || user.role === 'admin' || user.role === 'super_admin')) {
         console.log('[StoreLayout] User in Redux - authorized')
         setIsAuthorized(true)
         setLocalLoading(false)
@@ -60,7 +60,7 @@ const StoreLayout = ({ children }: StoreLayoutProps) => {
       }
 
       // If we already have a user but role doesn't match, still stop loading
-      if (user && !(user.role === 'seller' || user.role === 'admin')) {
+      if (user && !(user.role === 'seller' || user.role === 'admin' || user.role === 'super_admin')) {
         console.log('[StoreLayout] User role not seller/admin:', user.role)
         setIsAuthorized(false)
         setLocalLoading(false)
@@ -74,12 +74,12 @@ const StoreLayout = ({ children }: StoreLayoutProps) => {
         if (res.ok) {
           const data = await res.json()
           console.log('[StoreLayout] User fetched:', data.user)
-          if (data.user && (data.user.role === 'seller' || data.user.role === 'admin')) {
+          if (data.user && (data.user.role === 'seller' || data.user.role === 'admin' || data.user.role === 'super_admin')) {
             dispatch(setUser(data.user))
             dispatch(setAuthenticated(true))
             setIsAuthorized(true)
           } else {
-            console.log('[StoreLayout] User role not seller/admin:', data.user?.role)
+            console.log('[StoreLayout] User role not seller/admin/super_admin:', data.user?.role)
             toast.error('You need seller privileges to access this area')
             setIsAuthorized(false)
           }
