@@ -8,8 +8,12 @@ import { setUser, setLoading } from '../lib/features/auth/authSlice'
 function AuthInitializer({ children }: { children: React.ReactNode }) {
   const dispatch = useAppDispatch()
   const user = useAppSelector(state => state.auth.user)
+  const hasRunRef = useRef(false)
 
   useEffect(() => {
+    if (hasRunRef.current) return
+    hasRunRef.current = true
+
     const initializeAuth = async () => {
       // Skip if user already exists in Redux (loaded from localStorage or set during login)
       if (user) {
