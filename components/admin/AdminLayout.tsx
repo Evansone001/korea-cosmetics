@@ -19,42 +19,18 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     const authState = useAppSelector(state => state?.auth || { user: null, isAuthenticated: false, isLoading: true })
     const { user, isAuthenticated, isLoading } = authState
     const [isAuthorized, setIsAuthorized] = useState(false)
-    const [hasFetched, setHasFetched] = useState(false)
-
-    // Fetch user from cookie if Redux is empty
-    useEffect(() => {
-        const fetchUser = async () => {
-            if (user || hasFetched) return
-            try {
-                const res = await fetch('/api/auth/me', {
-                    credentials: 'include'   // important: send cookie
-                })
-                if (res.ok) {
-                    const data = await res.json()
-                    dispatch(setUser(data.user))
-                } else {
-                    // No valid session, keep unauthenticated
-                    dispatch(logout())
-                }
-            } catch (err) {
-                console.error('Failed to fetch user in AdminLayout', err)
-                dispatch(logout())
-            } finally {
-                dispatch(setLoading(false))
-                setHasFetched(true)
-            }
-        }
-        fetchUser()
-    }, [user, hasFetched, dispatch])
 
     // Check authorization based on role
     useEffect(() => {
+        console.log('[AdminLayout] Auth check - user:', user?.role, 'isAuthenticated:', isAuthenticated, 'isLoading:', isLoading)
         if (user && (user.role === 'admin' || user.role === 'super_admin')) {
+            console.log('[AdminLayout] User is admin/super_admin - authorized')
             setIsAuthorized(true)
         } else {
+            console.log('[AdminLayout] User not authorized or not loaded yet')
             setIsAuthorized(false)
         }
-    }, [user])
+    }, [user, isAuthenticated, isLoading])
 
     // Redirect if not authenticated after loading
     useEffect(() => {
@@ -63,11 +39,15 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
         }
     }, [isLoading, isAuthenticated, router])
 
+    console.log('[AdminLayout] Render check:', { isLoading, isAuthenticated, isAuthorized, userRole: user?.role })
+
     if (isLoading) {
+        console.log('[AdminLayout] Showing Loading spinner')
         return <Loading />
     }
 
     if (!isAuthenticated) {
+        console.log('[AdminLayout] Not authenticated, showing login prompt')
         return (
             <div className="min-h-screen flex flex-col items-center justify-center text-center px-6 bg-slate-50">
                 <div className="bg-white rounded-2xl shadow-xl p-10 max-w-md w-full">
@@ -85,6 +65,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     }
 
     if (!isAuthorized) {
+        console.log('[AdminLayout] Not authorized, user role:', user?.role)
         return (
             <div className="min-h-screen flex flex-col items-center justify-center text-center px-6 bg-slate-50">
                 <div className="bg-white rounded-2xl shadow-xl p-10 max-w-md w-full">
