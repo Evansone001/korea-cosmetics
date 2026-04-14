@@ -91,8 +91,11 @@ const authSlice = createSlice({
       state.isSocialAuthLoading = false
       state.socialAuthError = null
     },
+    setAuthenticated: (state, action: PayloadAction<boolean>) => {
+      state.isAuthenticated = action.payload
+    },
   },
 })
 
-export const { setUser, logout, setLoading, setSocialAuthLoading, setSocialAuthError, clearSocialAuthState } = authSlice.actions
+export const { setUser, logout, setLoading, setSocialAuthLoading, setSocialAuthError, clearSocialAuthState, setAuthenticated } = authSlice.actions
 export default authSlice.reducer

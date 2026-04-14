@@ -7,7 +7,7 @@ import { ArrowRightIcon } from "lucide-react"
 import SellerNavbar from "./StoreNavbar"
 import SellerSidebar from "./StoreSidebar"
 import { useAppSelector, useAppDispatch } from "@/lib/hooks"
-import { setUser, setLoading } from "@/lib/features/auth/authSlice"
+import { setUser, setLoading, setAuthenticated } from "@/lib/features/auth/authSlice"
 
 interface StoreLayoutProps {
   children: ReactNode
@@ -67,6 +67,7 @@ const StoreLayout = ({ children }: StoreLayoutProps) => {
               auth_provider: null,
               last_login_method: "email"
             }))
+            dispatch(setAuthenticated(true))
             setIsAuthorized(true)
             dispatch(setLoading(false))
             setStoreInfo({

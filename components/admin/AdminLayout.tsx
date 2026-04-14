@@ -7,21 +7,23 @@ import { ArrowRightIcon } from "lucide-react"
 import AdminNavbar from "./AdminNavbar"
 import AdminSidebar from "./AdminSidebar"
 import { useAppSelector, useAppDispatch } from "@/lib/hooks"
-import { setUser, setLoading } from "@/lib/features/auth/authSlice"   // ✅ correct
+import { setUser, setAuthenticated } from "@/lib/features/auth/authSlice"
 
 const AdminLayout = ({ children }: { children: React.ReactNode }) => {
     const router = useRouter()
     const dispatch = useAppDispatch()
-    const authState = useAppSelector(state => state?.auth || { user: null, isAuthenticated: false, isLoading: true })
-    const { user, isAuthenticated, isLoading } = authState
+    const authState = useAppSelector(state => state?.auth || { user: null, isAuthenticated: false })
+    const { user, isAuthenticated } = authState
     const [isAuthorized, setIsAuthorized] = useState(false)
-    const [fetchDone, setFetchDone] = useState(false)
+    const [localLoading, setLocalLoading] = useState(true)   // local loading state
 
     // Fetch user from cookie if Redux is empty
     useEffect(() => {
         const fetchUser = async () => {
-            // If we already have a user or already fetched, stop
-            if (user || fetchDone) return
+            if (user) {
+                setLocalLoading(false)
+                return
+            }
             try {
                 console.log('[AdminLayout] Fetching user from /api/auth/me')
                 const res = await fetch('/api/auth/me', { credentials: 'include' })
@@ -29,20 +31,20 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
                     const data = await res.json()
                     console.log('[AdminLayout] User fetched:', data.user)
                     dispatch(setUser(data.user))
+                    dispatch(setAuthenticated(true))
                 } else {
                     console.log('[AdminLayout] /api/auth/me returned', res.status)
-                    dispatch(setUser(null))
+                    dispatch(setAuthenticated(false))
                 }
             } catch (err) {
                 console.error('[AdminLayout] Fetch error:', err)
-                dispatch(setUser(null))
+                dispatch(setAuthenticated(false))
             } finally {
-                dispatch(setLoading(false))
-                setFetchDone(true)
+                setLocalLoading(false)
             }
         }
         fetchUser()
-    }, [user, fetchDone, dispatch])
+    }, [user, dispatch])
 
     // Update authorization when user changes
     useEffect(() => {
@@ -55,14 +57,14 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
 
     // Redirect to login if not authenticated after loading
     useEffect(() => {
-        if (!isLoading && !isAuthenticated) {
+        if (!localLoading && !isAuthenticated) {
             router.push('/login?redirect=/admin')
         }
-    }, [isLoading, isAuthenticated, router])
+    }, [localLoading, isAuthenticated, router])
 
-    console.log('[AdminLayout] Render check:', { isLoading, isAuthenticated, isAuthorized, userRole: user?.role })
+    console.log('[AdminLayout] Render check:', { localLoading, isAuthenticated, isAuthorized, userRole: user?.role })
 
-    if (isLoading) {
+    if (localLoading) {
         console.log('[AdminLayout] Showing Loading spinner')
         return <Loading />
     }
