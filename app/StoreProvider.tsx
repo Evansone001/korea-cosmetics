@@ -14,6 +14,8 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
       // Skip if user already exists in Redux (set during login)
       if (user) {
         console.log('[StoreProvider] User already in Redux, skipping /api/auth/me call')
+        // Make sure loading is false since we have a user
+        dispatch(setLoading(false))
         return
       }
 
