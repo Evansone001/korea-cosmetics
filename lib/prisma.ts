@@ -7,17 +7,17 @@ class MockPrismaClient {
 
   async findUnique(args?: any) {
     console.log('[Mock] findUnique called - use backend API instead')
-    return null
+    return null as any
   }
 
   async findMany(args?: any) {
     console.log('[Mock] findMany called - use backend API instead')
-    return []
+    return [] as any
   }
 
   async findFirst(args?: any) {
     console.log('[Mock] findFirst called - use backend API instead')
-    return null
+    return null as any
   }
 
   async create(args?: any) {
@@ -67,17 +67,17 @@ class MockPrismaClient {
 
   async groupBy(args?: any) {
     console.log('[Mock] groupBy called - use backend API instead')
-    return []
+    return [] as any
   }
 
   async raw(args?: any) {
     console.log('[Mock] raw called - use backend API instead')
-    return []
+    return [] as any
   }
 
   async queryRaw(args?: any) {
     console.log('[Mock] queryRaw called - use backend API instead')
-    return []
+    return [] as any
   }
 
   async executeRaw(args?: any) {
@@ -87,7 +87,7 @@ class MockPrismaClient {
 
   async $queryRaw(args?: any) {
     console.log('[Mock] $queryRaw called - use backend API instead')
-    return []
+    return [] as any
   }
 
   async $executeRaw(args?: any) {
@@ -100,7 +100,7 @@ class MockPrismaClient {
     if (typeof args === 'function') {
       return args(this)
     }
-    return []
+    return [] as any
   }
 
   async $connect() {
