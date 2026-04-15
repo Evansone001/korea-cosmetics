@@ -69,15 +69,14 @@ function LoginContent({ dispatch, redirect }: {
             })
 
             const data = await response.json()
-            console.log('[Login] API response:', { success: data.success, user: data.user })
+            console.log('[Login] API response:', { success: data.success, user: data.user, access_token: !!data.access_token })
 
-            if (response.ok && data.success) {
+            // Backend returns { access_token, message, user } without success field
+            if (response.ok && data.access_token) {
                 console.log('[Login] Login successful, dispatching setUser with role:', data.user?.role)
                 
                 // Store token in localStorage for API client
-                if (data.access_token) {
-                    localStorage.setItem('auth-token', data.access_token)
-                }
+                localStorage.setItem('auth-token', data.access_token)
                 
                 dispatch(setUser(data.user))
                 dispatch(setAuthenticated(true))

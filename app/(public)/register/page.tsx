@@ -76,7 +76,8 @@ function RegisterContent() {
 
             const data = await response.json()
 
-            if (response.ok && data.success) {
+            // Backend returns { access_token, message, user } without success field
+            if (response.ok && data.access_token) {
                 // Update Redux state
                 dispatch(setUser(data.user))
                 
