@@ -14,14 +14,10 @@ export async function GET(request: NextRequest) {
       'Content-Type': 'application/json',
     };
 
-    // Add JWT token to Authorization header if present
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-
     const response = await fetch(`${FLASK_BACKEND_URL}/api/auth/me`, {
       method: 'GET',
       headers,
+      credentials: 'include', // Send cookies for authentication
     });
 
     const data = await response.json();

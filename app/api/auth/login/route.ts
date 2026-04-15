@@ -81,15 +81,21 @@ export async function POST(request: Request) {
     const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     // Only use secure cookies if backend is HTTPS (not HTTP)
     const isHttpsBackend = FLASK_BACKEND_URL.startsWith('https://');
-    response.cookies.set('auth-token', token, {
+    // Only set domain for production, not localhost
+    const isProduction = process.env.NODE_ENV === 'production' || FLASK_BACKEND_URL.includes('koreacosmetics.top');
+    const cookieOptions: any = {
       httpOnly: true,
-      secure: isHttpsBackend, // Only secure if backend is HTTPS
+      secure: isHttpsBackend,
       sameSite: 'lax',
       expires: expires,
       path: '/',
-      domain: '.koreacosmetics.top', // Work across subdomains
-    });
-    console.log('[Login API] Cookie set, secure:', isHttpsBackend);
+    };
+    // Only set domain in production for cross-subdomain cookies
+    if (isProduction) {
+      cookieOptions.domain = '.koreacosmetics.top';
+    }
+    response.cookies.set('auth-token', token, cookieOptions);
+    console.log('[Login API] Cookie set, secure:', isHttpsBackend, 'domain:', cookieOptions.domain || 'none');
 
     return response;
   } catch (error) {
@@ -106,15 +112,20 @@ export async function DELETE() {
   const response = NextResponse.json({ success: true });
   // Only use secure cookies if backend is HTTPS (not HTTP)
   const isHttpsBackend = FLASK_BACKEND_URL.startsWith('https://');
-  
-  response.cookies.set('auth-token', '', {
+  // Only set domain for production, not localhost
+  const isProduction = process.env.NODE_ENV === 'production' || FLASK_BACKEND_URL.includes('koreacosmetics.top');
+  const cookieOptions: any = {
     httpOnly: true,
-    secure: isHttpsBackend, // Only secure if backend is HTTPS
+    secure: isHttpsBackend,
     sameSite: 'strict',
     maxAge: 0,
     path: '/',
-    domain: '.koreacosmetics.top', // Work across subdomains
-  });
+  };
+  // Only set domain in production for cross-subdomain cookies
+  if (isProduction) {
+    cookieOptions.domain = '.koreacosmetics.top';
+  }
+  response.cookies.set('auth-token', '', cookieOptions);
 
   return response;
 }

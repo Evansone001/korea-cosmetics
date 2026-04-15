@@ -69,14 +69,20 @@ export async function POST(request: Request) {
 
     // Only use secure cookies if backend is HTTPS (not HTTP)
     const isHttpsBackend = FLASK_BACKEND_URL.startsWith('https://');
-    response.cookies.set('auth-token', token, {
+    // Only set domain for production, not localhost
+    const isProduction = process.env.NODE_ENV === 'production' || FLASK_BACKEND_URL.includes('koreacosmetics.top');
+    const cookieOptions: any = {
       httpOnly: true,
-      secure: isHttpsBackend, // Only secure if backend is HTTPS
+      secure: isHttpsBackend,
       sameSite: 'lax',
       maxAge: 24 * 60 * 60,
       path: '/',
-      domain: '.koreacosmetics.top', // Work across subdomains
-    });
+    };
+    // Only set domain in production for cross-subdomain cookies
+    if (isProduction) {
+      cookieOptions.domain = '.koreacosmetics.top';
+    }
+    response.cookies.set('auth-token', token, cookieOptions);
 
     return response;
   } catch (error) {
