@@ -100,8 +100,8 @@ export async function middleware(request: NextRequest) {
   if (token) {
     try {
       const response = await fetch(`${process.env.FLASK_BACKEND_URL || 'http://127.0.0.1:5000'}/api/auth/me`, {
+        credentials: 'include',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       })

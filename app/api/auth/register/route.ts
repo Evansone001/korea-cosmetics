@@ -67,15 +67,17 @@ export async function POST(request: Request) {
       },
     });
 
-    // Only use secure cookies if backend is HTTPS (not HTTP)
-    const isHttpsBackend = FLASK_BACKEND_URL.startsWith('https://');
-    // Only set domain for production, not localhost
-    const isProduction = process.env.NODE_ENV === 'production' || FLASK_BACKEND_URL.includes('koreacosmetics.top');
+    // Set secure HTTP-only cookie with Flask token
+    console.log('[Register API] Setting cookie, token length:', token?.length);
+    // Calculate expiration: 30 days from now (matching Flask JWT_ACCESS_TOKEN_EXPIRES)
+    const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    // Base secure flag on NODE_ENV, not backend URL
+    const isProduction = process.env.NODE_ENV === 'production';
     const cookieOptions: any = {
       httpOnly: true,
-      secure: isHttpsBackend,
+      secure: isProduction, // MUST be true in production HTTPS
       sameSite: 'lax',
-      maxAge: 24 * 60 * 60,
+      expires: expires,
       path: '/',
     };
     // Only set domain in production for cross-subdomain cookies
@@ -83,6 +85,7 @@ export async function POST(request: Request) {
       cookieOptions.domain = '.koreacosmetics.top';
     }
     response.cookies.set('auth-token', token, cookieOptions);
+    console.log('[Register API] Cookie set, secure:', isProduction, 'domain:', cookieOptions.domain || 'none');
 
     return response;
   } catch (error) {
