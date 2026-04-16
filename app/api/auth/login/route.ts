@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { logUserAction, type UserAction } from '@/lib/services/userActionLog';
 
 const FLASK_BACKEND_URL = process.env.FLASK_BACKEND_URL || 'http://127.0.0.1:5000';
+const USE_MOCK_DATA = process.env.USE_MOCK_AUTH === 'true';
 
 // POST - Login
 export async function POST(request: Request) {
@@ -17,7 +18,53 @@ export async function POST(request: Request) {
       );
     }
 
-    // Call Flask backend for authentication
+    console.log('[Login API] Attempting login:', { email, passwordLength: password?.length, useMock: USE_MOCK_DATA });
+
+    // Use mock data if enabled or if backend is unavailable
+    if (USE_MOCK_DATA) {
+      console.log('[Login API] Using mock data for login');
+
+      const mockUser = {
+        id: 'mock-user-id-123',
+        email: email,
+        name: 'Mock User',
+        role: email.includes('admin') ? 'admin' : email.includes('seller') ? 'seller' : 'customer',
+        image: null,
+      };
+
+      const mockToken = 'mock-access-token-' + Date.now();
+      const mockRefreshToken = 'mock-refresh-token-' + Date.now();
+
+      const response = NextResponse.json({
+        user: mockUser,
+        access_token: mockToken,
+        refresh_token: mockRefreshToken,
+      });
+
+      const isProduction = process.env.NODE_ENV === 'production';
+      const expires = new Date();
+      expires.setDate(expires.getDate() + 30);
+
+      response.cookies.set('auth-token', mockToken, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: 'lax',
+        expires,
+        path: '/',
+      });
+
+      response.cookies.set('refresh-token', mockRefreshToken, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: 'lax',
+        expires,
+        path: '/',
+      });
+
+      return response;
+    }
+
+    // Real backend login
     console.log('[Login API] Attempting login with Flask backend:', { email, passwordLength: password?.length });
 
     const flaskResponse = await fetch(`${FLASK_BACKEND_URL}/api/auth/login`, {
@@ -40,7 +87,8 @@ export async function POST(request: Request) {
 
     const user = flaskData.user;
     const token = flaskData.access_token;
-    
+    const refreshToken = flaskData.refresh_token;
+
     console.log('[Login API] Flask login successful for role:', user.role);
 
     // Log successful login
@@ -81,6 +129,7 @@ export async function POST(request: Request) {
     const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     // Base secure flag on NODE_ENV, not backend URL
     const isProduction = process.env.NODE_ENV === 'production';
+    const cookieDomain = process.env.COOKIE_DOMAIN;
     const cookieOptions: any = {
       httpOnly: true,
       secure: isProduction, // MUST be true in production HTTPS
@@ -88,11 +137,27 @@ export async function POST(request: Request) {
       expires: expires,
       path: '/',
     };
-    // Only set domain in production for cross-subdomain cookies
-    if (isProduction) {
-      cookieOptions.domain = '.koreacosmetics.top';
+    // Only set domain if configured in environment
+    if (cookieDomain) {
+      cookieOptions.domain = cookieDomain;
     }
     response.cookies.set('auth-token', token, cookieOptions);
+
+    // Set refresh token cookie if provided
+    if (refreshToken) {
+      const refreshCookieOptions: any = {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: 'lax',
+        expires: expires,
+        path: '/',
+      };
+      if (cookieDomain) {
+        refreshCookieOptions.domain = cookieDomain;
+      }
+      response.cookies.set('refresh-token', refreshToken, refreshCookieOptions);
+    }
+
     console.log('[Login API] Cookie set, secure:', isProduction, 'domain:', cookieOptions.domain || 'none');
 
     return response;
@@ -110,6 +175,7 @@ export async function DELETE() {
   const response = NextResponse.json({ success: true });
   // Base secure flag on NODE_ENV, not backend URL
   const isProduction = process.env.NODE_ENV === 'production';
+  const cookieDomain = process.env.COOKIE_DOMAIN;
   const cookieOptions: any = {
     httpOnly: true,
     secure: isProduction, // MUST be true in production HTTPS
@@ -117,11 +183,12 @@ export async function DELETE() {
     maxAge: 0,
     path: '/',
   };
-  // Only set domain in production for cross-subdomain cookies
-  if (isProduction) {
-    cookieOptions.domain = '.koreacosmetics.top';
+  // Only set domain if configured in environment
+  if (cookieDomain) {
+    cookieOptions.domain = cookieDomain;
   }
   response.cookies.set('auth-token', '', cookieOptions);
+  response.cookies.set('refresh-token', '', cookieOptions);
 
   return response;
 }

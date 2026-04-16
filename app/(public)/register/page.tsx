@@ -76,8 +76,8 @@ function RegisterContent() {
 
             const data = await response.json()
 
-            // Backend returns { access_token, message, user } without success field
-            if (response.ok && data.access_token) {
+            // Backend returns { success, message, user } with token in cookie
+            if (response.ok && data.user) {
                 // Update Redux state
                 dispatch(setUser(data.user))
                 

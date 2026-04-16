@@ -286,8 +286,8 @@ export default function ProductCatalogPage() {
         price: editingProduct.price ? editingProduct.price.toString() : '',
         mrp: editingProduct.mrp ? editingProduct.mrp.toString() : '',
         category: editingProduct.category || '',
-        categories: mainCategories.map((c: any) => c.id),
-        subcategories: subCategories.map((c: any) => c.id),
+        categories: mainCategories?.map((c: any) => c.id) || [],
+        subcategories: subCategories?.map((c: any) => c.id) || [],
         manufacturer: editingProduct.manufacturer || '',
         brand: editingProduct.brand || '',
         stock: editingProduct.stock ? editingProduct.stock.toString() : '',
@@ -300,7 +300,14 @@ export default function ProductCatalogPage() {
   const fetchProducts = async () => {
     try {
       const response: any = await apiClient.getProducts({ limit: 100 });
-      setProducts(response.products || []);
+
+      const normalized = (response.products || []).map((p: any) => ({
+        ...p,
+        images: Array.isArray(p.images) ? p.images : [],
+        categories: Array.isArray(p.categories) ? p.categories : [],
+      }));
+
+      setProducts(normalized);
     } catch (error) {
       console.error('Failed to fetch products:', error);
       toast.error('Failed to load products');
@@ -683,7 +690,7 @@ export default function ProductCatalogPage() {
               </div>
               {selectedSubcategoryTags?.length > 0 && (
                 <div className="flex flex-wrap gap-2">
-                  {selectedSubcategoryTags.map((sub: any) => (
+                  {selectedSubcategoryTags?.map((sub: any) => (
                     <span
                       key={sub.id}
                       className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm"
@@ -716,7 +723,7 @@ export default function ProductCatalogPage() {
                   className="flex-1 px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
                 >
                   <option value="">Select manufacturer</option>
-                  {manufacturers.map(m => (
+                  {manufacturers?.map(m => (
                     <option key={m} value={m}>{m}</option>
                   ))}
                 </select>
@@ -892,7 +899,9 @@ export default function ProductCatalogPage() {
           </span>
         </div>
 
-        {filteredProducts.length === 0 ? (
+        {(() => {
+          const safeProducts = Array.isArray(filteredProducts) ? filteredProducts : [];
+          return safeProducts.length === 0 ? (
           <div className="p-12 text-center">
             <Package className="w-16 h-16 text-slate-200 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-slate-900 mb-2">No products yet</h3>
@@ -909,24 +918,27 @@ export default function ProductCatalogPage() {
           </div>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
-            {filteredProducts.map((product) => (
+            {safeProducts.map((product) => (
               <div
                 key={product.id}
                 className="border border-slate-200 rounded-xl overflow-hidden transition-all hover:border-slate-300 hover:shadow-md"
               >
                 <div className="relative aspect-square bg-slate-100">
-                  {product.images[0] ? (
-                    <Image
-                      src={getImageUrl(product.images[0])}
-                      alt={product.name}
-                      fill
-                      className="object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Package className="text-slate-300" size={48} />
-                    </div>
-                  )}
+                  {(() => {
+                    const safeImages = Array.isArray(product.images) ? product.images : [];
+                    return safeImages.length > 0 ? (
+                      <Image
+                        src={getImageUrl(safeImages[0])}
+                        alt={product.name}
+                        fill
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Package className="text-slate-300" size={48} />
+                      </div>
+                    );
+                  })()}
                   <div className="absolute top-2 right-2">
                     <span className="bg-white/90 backdrop-blur px-2 py-1 rounded text-xs font-medium">
                       {product.origin}
@@ -965,7 +977,7 @@ export default function ProductCatalogPage() {
                   <div className="flex items-center gap-2 mt-3">
                     {product.category && product.categories?.length > 0 ? (
                       <div className="flex items-center gap-1 flex-wrap">
-                        {product.categories.map((cat: any) => (
+                        {product.categories?.map((cat: any) => (
                           <span key={cat.id} className="text-xs bg-slate-100 px-2 py-1 rounded">
                             {cat.parent_name ? `${cat.parent_name} &gt; ${cat.name}` : cat.name}
                           </span>
@@ -1010,7 +1022,8 @@ export default function ProductCatalogPage() {
               </div>
             ))}
           </div>
-        )}
+        );
+        })()}
       </div>
 
       {/* Add to Warehouse Modal */}

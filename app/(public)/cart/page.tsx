@@ -2,9 +2,9 @@
 import Counter from "@/components/Counter";
 import OrderSummary from "@/components/OrderSummary";
 import PageTitle from "@/components/PageTitle";
-import { deleteItemFromCart } from "@/lib/features/cart/cartSlice";
+import ImageWithFallback from "@/components/ImageWithFallback";
+import { deleteItemFromCart, fetchCart } from "@/lib/features/cart/cartSlice";
 import { Trash2Icon } from "lucide-react";
-import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import type { Product, CartItem } from "@/types";
@@ -26,6 +26,9 @@ export default function Cart() {
         setLoading(true);
         const productIds = Object.keys(cartItems);
         
+        console.log('[Cart] cartItems:', cartItems);
+        console.log('[Cart] productIds:', productIds);
+        
         if (productIds.length === 0) {
             setCartArray([]);
             setTotalPrice(0);
@@ -36,9 +39,14 @@ export default function Cart() {
         try {
             // Fetch product details for each cart item
             const productPromises = productIds.map(id => 
-                apiClient.getProduct(id).catch(() => null)
+                apiClient.getProduct(id).catch((err) => {
+                    console.error(`[Cart] Failed to fetch product ${id}:`, err);
+                    return null;
+                })
             );
             const products = await Promise.all(productPromises);
+            
+            console.log('[Cart] Fetched products:', products);
             
             const newCartArray: CartItem[] = [];
             let total = 0;
@@ -46,14 +54,28 @@ export default function Cart() {
             productIds.forEach((id, index) => {
                 const product = products[index] as Product | null;
                 const quantity = cartItems[id];
+                
+                console.log(`[Cart] Processing item ${id}:`, { product, quantity });
+                
                 if (product && quantity && product.price) {
                     newCartArray.push({
                         product: product,
                         quantity: quantity,
                     });
                     total += product.price * quantity;
+                } else {
+                    console.log(`[Cart] Skipped item ${id}:`, {
+                        hasProduct: !!product,
+                        hasQuantity: !!quantity,
+                        hasPrice: !!(product && product.price),
+                        product,
+                        quantity
+                    });
                 }
             });
+            
+            console.log('[Cart] cartArray:', newCartArray);
+            console.log('[Cart] total:', total);
             
             setCartArray(newCartArray);
             setTotalPrice(total);
@@ -67,6 +89,11 @@ export default function Cart() {
     const handleDeleteItemFromCart = (productId: string) => {
         dispatch(deleteItemFromCart({ productId }))
     }
+
+    // Fetch cart from server on mount
+    useEffect(() => {
+        dispatch(fetchCart())
+    }, [dispatch])
 
     // Fetch cart products whenever cartItems change
     useEffect(() => {
@@ -106,7 +133,7 @@ export default function Cart() {
                                         <td className="flex gap-3 my-4">
                                             <div className="flex gap-3 items-center justify-center bg-slate-100 size-18 rounded-md">
                                                 {item.product.images && item.product.images.length > 0 ? (
-                                                    <Image src={item.product.images[0]} className="h-14 w-auto" alt="" width={45} height={45} />
+                                                    <ImageWithFallback src={item.product.images[0]} alt="" width={45} height={45} className="h-14 w-auto" />
                                                 ) : (
                                                     <span className="text-2xl">📦</span>
                                                 )}

@@ -18,10 +18,10 @@ const AdminNavbar = () => {
   }
 
   return (
-    <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-pink-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
-      <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 h-16">
+    <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-pink-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.02)] overflow-x-hidden">
+      <div className="flex items-center justify-between px-3 sm:px-4 md:px-6 lg:px-8 h-16">
         {/* Logo - Centered on mobile */}
-        <Link href="/" className="flex items-center gap-2 group absolute left-1/2 transform -translate-x-1/2 sm:static sm:transform-none">
+        <Link href="/" className="flex items-center gap-1 sm:gap-2 group absolute left-1/2 transform -translate-x-1/2 sm:static sm:transform-none">
           <div className="relative w-10 h-10">
             <Image 
               src={assets.korea_logo} 
@@ -42,30 +42,30 @@ const AdminNavbar = () => {
         <div className="w-10 sm:hidden"></div>
 
         {/* Right Section */}
-        <div className="flex items-center gap-2 sm:gap-4">
+        <div className="flex items-center gap-1 sm:gap-2 md:gap-4">
           {/* Notifications */}
-          <button className="relative p-2 text-slate-500 hover:text-pink-600 hover:bg-pink-50 rounded-xl transition-all">
-            <Bell className="w-5 h-5" />
+          <button className="relative p-1.5 sm:p-2 text-slate-500 hover:text-pink-600 hover:bg-pink-50 rounded-xl transition-all">
+            <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-gradient-to-r from-pink-500 to-rose-500 rounded-full ring-2 ring-white"></span>
           </button>
 
           {/* Logout */}
           <button 
             onClick={handleLogout}
-            className="hidden sm:flex p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+            className="hidden sm:flex p-1.5 sm:p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
             title="Logout"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
 
           {/* User Profile */}
-          <div className="flex items-center gap-3 pl-2 sm:pl-4 border-l border-pink-200">
+          <div className="flex items-center gap-2 sm:gap-3 pl-1 sm:pl-2 md:pl-4 border-l border-pink-200">
             <div className="hidden sm:block text-right">
               <p className="text-sm font-medium text-slate-800">Admin User</p>
               <p className="text-xs text-pink-600">admin@koreacosmetics.com</p>
             </div>
-            <div className="w-9 h-9 bg-gradient-to-br from-pink-500 to-rose-500 rounded-xl flex items-center justify-center text-white shadow-md">
-              <User className="w-5 h-5" />
+            <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-pink-500 to-rose-500 rounded-xl flex items-center justify-center text-white shadow-md">
+              <User className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
         </div>

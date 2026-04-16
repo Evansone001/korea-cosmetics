@@ -49,7 +49,9 @@ export default function CRMIntegrationPage() {
 
   const fetchConfig = async () => {
     try {
-      const response = await fetch('/api/admin/crm-config');
+      const response = await fetch('/api/admin/crm-config', {
+        credentials: 'include',
+      });
       const data = await response.json();
       setConfig(data);
       
@@ -71,6 +73,7 @@ export default function CRMIntegrationPage() {
     try {
       const response = await fetch('/api/admin/crm-config', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           webhookUrl,
@@ -100,6 +103,7 @@ export default function CRMIntegrationPage() {
     try {
       const response = await fetch('/api/admin/crm-sync', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           entityType: 'customer',

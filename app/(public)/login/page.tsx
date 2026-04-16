@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useAppDispatch } from '@/lib/hooks'
@@ -32,17 +32,18 @@ export default function Login() {
     )
 }
 
-function LoginContent({ dispatch, redirect }: { 
-    dispatch: any, 
-    redirect: string 
+function LoginContent({ dispatch, redirect }: {
+    dispatch: any,
+    redirect: string
 }) {
 
+    const router = useRouter()
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [showPassword, setShowPassword] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState('')
-    
+
     const { isLoading: isSocialAuthLoading, error: socialAuthError, initiateGoogleAuth, initiateGitHubAuth, clearError } = useSocialAuth()
 
     // Handle social auth errors
@@ -74,13 +75,10 @@ function LoginContent({ dispatch, redirect }: {
             // Backend returns { access_token, message, user } without success field
             if (response.ok && data.access_token) {
                 console.log('[Login] Login successful, dispatching setUser with role:', data.user?.role)
-                
-                // Store token in localStorage for API client
-                localStorage.setItem('auth-token', data.access_token)
-                
+
                 dispatch(setUser(data.user))
                 dispatch(setAuthenticated(true))
-                
+
                 // Role-based redirect logic
                 let finalRedirect = redirect
 
@@ -101,12 +99,14 @@ function LoginContent({ dispatch, redirect }: {
                         finalRedirect = '/orders'
                     }
                 }
-                
+
                 console.log('[Login] Redux dispatch complete, redirecting to:', finalRedirect)
-                
-                // Full page reload to ensure StoreProvider runs auth check
-                console.log('[Login] Executing full page redirect to:', finalRedirect)
-                window.location.href = finalRedirect
+
+                // Add small delay to allow browser to update cookie store before redirect
+                setTimeout(() => {
+                    console.log('[Login] Executing router.push to:', finalRedirect)
+                    router.push(finalRedirect)
+                }, 100)
             } else {
                 console.log('[Login] Login failed:', data.error)
                 setError(data.error || 'Invalid email or password')

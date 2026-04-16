@@ -34,7 +34,7 @@ export default function Product() {
                 created_at?: string;
                 updated_at?: string;
             } | null };
-            if (response.product) {
+            if (response?.product) {
                 const backendUrl = process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000';
                 const images = (response.product.images || []).map((img: string) => {
                     // If image is a relative path, prepend backend URL

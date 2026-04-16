@@ -154,22 +154,47 @@ export interface RatingState {
 
 export interface AuthState {
   user: {
-    id: string;
-    email: string;
-    name: string;
-    role: 'customer' | 'seller' | 'admin' | 'super_admin';
-    image?: string;
-    email_verified: boolean;
-    auth_provider: 'email' | 'google' | 'github' | null;
-    last_login_method: 'email' | 'google' | 'github';
-    phone?: string;
-    first_name?: string;
-    last_name?: string;
-  } | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  isSocialAuthLoading: boolean;
-  socialAuthError: string | null;
+    id: string
+    email: string
+    name: string
+    role: 'customer' | 'seller' | 'admin' | 'super_admin'
+    image?: string
+    email_verified: boolean
+    auth_provider: 'email' | 'google' | 'github' | null
+    last_login_method: 'email' | 'google' | 'github'
+    phone?: string
+    first_name?: string
+    last_name?: string
+  } | null
+  isAuthenticated: boolean
+  isLoading: boolean
+  isSocialAuthLoading: boolean
+  socialAuthError: string | null
+  authChecked: boolean // ✅ ADD THIS HERE
+}
+
+export interface WholesaleCartItem {
+  id: string;
+  name: string;
+  description: string;
+  wholesalePrice: number;
+  retailPrice: number;
+  mrp?: number;
+  category: string;
+  manufacturer: string;
+  images: string[];
+  minOrderQuantity: number;
+  availableStock: number;
+  unit: string;
+  origin: string;
+  profitMargin: number;
+  cartQuantity: number;
+}
+
+export interface WholesaleCartState {
+  items: WholesaleCartItem[];
+  totalItems: number;
+  subtotal: number;
 }
 
 export interface RootState {
@@ -178,6 +203,7 @@ export interface RootState {
   address: AddressState;
   rating: RatingState;
   auth: AuthState;
+  wholesaleCart: WholesaleCartState;
 }
 
 // Component Props Types

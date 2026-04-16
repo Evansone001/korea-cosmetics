@@ -8,8 +8,8 @@ export async function GET(request: NextRequest) {
     const cookie = request.headers.get('cookie');
     const authToken = cookie?.match(/auth-token=([^;]+)/)?.[1];
 
-    console.log('[Admin Metrics API] Cookie from browser:', cookie ? 'present' : 'missing');
-    console.log('[Admin Metrics API] Auth token:', authToken ? `${authToken.substring(0, 10)}...` : 'missing');
+    console.log('[Admin Stores Performance API] Cookie from browser:', cookie ? 'present' : 'missing');
+    console.log('[Admin Stores Performance API] Auth token:', authToken ? `${authToken.substring(0, 10)}...` : 'missing');
 
     // Forward request to backend with credentials to include cookies
     const headers: Record<string, string> = {
@@ -18,18 +18,18 @@ export async function GET(request: NextRequest) {
 
     if (authToken) {
       headers['Cookie'] = `auth-token=${authToken}`;
-      console.log('[Admin Metrics API] Forwarding cookie to backend');
+      console.log('[Admin Stores Performance API] Forwarding cookie to backend');
     } else {
-      console.log('[Admin Metrics API] No cookie to forward to backend');
+      console.log('[Admin Stores Performance API] No cookie to forward to backend');
     }
 
-    const response = await fetch(`${FLASK_BACKEND_URL}/api/admin/metrics/platform`, {
+    const response = await fetch(`${FLASK_BACKEND_URL}/api/admin/metrics/stores/performance`, {
       method: 'GET',
       headers,
       credentials: 'include',
     });
 
-    console.log('[Admin Metrics API] Backend response status:', response.status);
+    console.log('[Admin Stores Performance API] Backend response status:', response.status);
 
     const data = await response.json();
 
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Fetch platform metrics error:', error);
-    return NextResponse.json({ error: 'Failed to fetch platform metrics' }, { status: 500 });
+    console.error('Fetch store performance metrics error:', error);
+    return NextResponse.json({ error: 'Failed to fetch store performance metrics' }, { status: 500 });
   }
 }

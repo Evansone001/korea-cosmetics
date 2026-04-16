@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import toast from 'react-hot-toast';
+import { apiClient } from '@/lib/api-client';
 import { 
   ShoppingCart, 
   CheckCircle2, 
@@ -20,7 +22,6 @@ import {
   Clock,
   TrendingUp
 } from 'lucide-react';
-import toast from 'react-hot-toast';
 import { Document, Page, Text, View, StyleSheet, PDFDownloadLink } from '@react-pdf/renderer';
 import { createTw } from 'react-pdf-tailwind';
 
@@ -179,15 +180,9 @@ export default function WholesaleOrdersPage() {
 
   const fetchOrders = async () => {
     try {
-      const response = await fetch('/api/admin/wholesale-orders');
-      const data = await response.json();
+      const data = await apiClient.request<any>('/api/admin/wholesale-orders');
       console.log('API Response:', data);
-      if (response.ok) {
-        setOrders(data.orders || []);
-      } else {
-        console.error('API Error:', data.error);
-        toast.error(data.error || 'Failed to fetch orders');
-      }
+      setOrders(data.orders || []);
     } catch (error) {
       console.error('Fetch error:', error);
       toast.error('Failed to fetch orders');
@@ -201,36 +196,24 @@ export default function WholesaleOrdersPage() {
     
     try {
       const body: Record<string, string> = { orderId, action };
-      
-      if (action === 'ship') {
-        if (!trackingNumber) {
-          toast.error('Tracking number required');
-          return;
-        }
+      if (action === 'ship' && trackingNumber) {
         body.trackingNumber = trackingNumber;
       }
 
-      const response = await fetch('/api/admin/wholesale-orders', {
+      const data = await apiClient.request<any>('/api/admin/wholesale-orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        toast.success(data.message);
-        
-        if (action === 'approve' && data.invoice) {
-          setInvoiceData(data.invoice);
-          setShowInvoice(true);
-        }
-        
-        fetchOrders();
-        setTrackingNumber('');
-      } else {
-        toast.error(data.error || 'Action failed');
+      toast.success(data.message);
+      
+      if (action === 'approve' && data.invoice) {
+        setInvoiceData(data.invoice);
+        setShowInvoice(true);
       }
+      
+      fetchOrders();
+      setTrackingNumber('');
     } catch (error) {
       toast.error('Failed to process action');
     } finally {

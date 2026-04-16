@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
-
+import { AuthState } from '@/types'
 export interface User {
   id: string
   email: string
@@ -14,37 +14,13 @@ export interface User {
   last_name?: string
 }
 
-interface AuthState {
-  user: User | null
-  isAuthenticated: boolean
-  isLoading: boolean
-  isSocialAuthLoading: boolean
-  socialAuthError: string | null
-}
-
-// Load user from localStorage on init (for SSR safety, check if window exists)
-const loadUserFromStorage = (): User | null => {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem('auth-user')
-    if (stored) {
-      try {
-        return JSON.parse(stored)
-      } catch {
-        return null
-      }
-    }
-  }
-  return null
-}
-
-const persistedUser = loadUserFromStorage()
-
 const initialState: AuthState = {
-  user: persistedUser,
-  isAuthenticated: !!persistedUser,
-  isLoading: !persistedUser, // If no persisted user, start loading
+  user: null,
+  isAuthenticated: false,
+  isLoading: true,
   isSocialAuthLoading: false,
   socialAuthError: null,
+  authChecked: false,
 }
 
 const authSlice = createSlice({
@@ -57,7 +33,7 @@ const authSlice = createSlice({
       state.isLoading = false
       state.isSocialAuthLoading = false
       state.socialAuthError = null
-      // Persist to localStorage
+
       if (typeof window !== 'undefined') {
         if (action.payload) {
           localStorage.setItem('auth-user', JSON.stringify(action.payload))
@@ -66,36 +42,57 @@ const authSlice = createSlice({
         }
       }
     },
+
     logout: (state) => {
       state.user = null
       state.isAuthenticated = false
       state.isLoading = false
       state.isSocialAuthLoading = false
       state.socialAuthError = null
-      // Clear localStorage
+      state.authChecked = true
+
       if (typeof window !== 'undefined') {
         localStorage.removeItem('auth-user')
         localStorage.removeItem('auth-token')
       }
     },
+
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.isLoading = action.payload
     },
+
+    setAuthChecked: (state, action: PayloadAction<boolean>) => {
+      state.authChecked = action.payload
+    },
+
     setSocialAuthLoading: (state, action: PayloadAction<boolean>) => {
       state.isSocialAuthLoading = action.payload
     },
+
     setSocialAuthError: (state, action: PayloadAction<string | null>) => {
       state.socialAuthError = action.payload
     },
+
     clearSocialAuthState: (state) => {
       state.isSocialAuthLoading = false
       state.socialAuthError = null
     },
+
     setAuthenticated: (state, action: PayloadAction<boolean>) => {
       state.isAuthenticated = action.payload
     },
   },
 })
 
-export const { setUser, logout, setLoading, setSocialAuthLoading, setSocialAuthError, clearSocialAuthState, setAuthenticated } = authSlice.actions
+export const {
+  setUser,
+  logout,
+  setLoading,
+  setAuthChecked,
+  setSocialAuthLoading,
+  setSocialAuthError,
+  clearSocialAuthState,
+  setAuthenticated,
+} = authSlice.actions
+
 export default authSlice.reducer

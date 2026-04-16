@@ -229,12 +229,12 @@ export default function Profile() {
                     }
                     
                     try {
-                        let token = typeof document !== 'undefined' ? 
+                        let token = typeof document !== 'undefined' ?
                             document.cookie.split(';').find(c => c.trim().startsWith('auth-token='))?.split('=')[1] : null
                         if (!token && typeof localStorage !== 'undefined') {
                             token = localStorage.getItem('auth-token')
                         }
-                        
+
                         if (token) {
                             const addressesResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000'}/api/addresses`, {
                                 headers: {
@@ -242,7 +242,7 @@ export default function Profile() {
                                     'Content-Type': 'application/json'
                                 }
                             })
-                            
+
                             if (addressesResponse.ok) {
                                 const addressesData = await addressesResponse.json()
                                 if (addressesData.addresses && addressesData.addresses.length > 0) {
@@ -255,6 +255,9 @@ export default function Profile() {
                                         country: firstAddress.country || ''
                                     }
                                 }
+                            } else if (addressesResponse.status === 404) {
+                                // Handle 404 gracefully - no addresses found
+                                console.log('No addresses found for user')
                             }
                         }
                     } catch (addressError) {

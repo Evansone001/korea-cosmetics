@@ -56,7 +56,7 @@ export default function StoreInventoryPage() {
       const response = await apiClient.getInventory({ limit: 100 });
 
       // Transform backend inventory to frontend format
-      const transformedInventory = response.inventory?.map((item: any) => ({
+      const transformedInventory = response?.inventory?.map((item: any) => ({
         productId: item.product_id,
         productName: item.product_name,
         purchasedQuantity: item.purchased_quantity || 0,

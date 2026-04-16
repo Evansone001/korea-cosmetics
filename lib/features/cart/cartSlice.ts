@@ -34,16 +34,13 @@ export const fetchCart = createAsyncThunk(
     'cart/fetchCart',
     async (_, { rejectWithValue }) => {
         try {
-            const token = getAuthToken()
             const headers: Record<string, string> = {
                 'Content-Type': 'application/json',
-            }
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`
             }
             
             const response = await fetch(`${API_BASE_URL}/api/cart`, {
                 headers,
+                credentials: 'include',
             })
             const data = await response.json()
             

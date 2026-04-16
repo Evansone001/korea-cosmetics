@@ -49,6 +49,7 @@ export async function POST(request: Request) {
 
     const user = flaskData.user;
     const token = flaskData.access_token;
+    const refreshToken = flaskData.refresh_token;
 
     // Create response with user data and token
     const response = NextResponse.json({
@@ -73,6 +74,7 @@ export async function POST(request: Request) {
     const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     // Base secure flag on NODE_ENV, not backend URL
     const isProduction = process.env.NODE_ENV === 'production';
+    const cookieDomain = process.env.COOKIE_DOMAIN;
     const cookieOptions: any = {
       httpOnly: true,
       secure: isProduction, // MUST be true in production HTTPS
@@ -80,11 +82,27 @@ export async function POST(request: Request) {
       expires: expires,
       path: '/',
     };
-    // Only set domain in production for cross-subdomain cookies
-    if (isProduction) {
-      cookieOptions.domain = '.koreacosmetics.top';
+    // Only set domain if configured in environment
+    if (cookieDomain) {
+      cookieOptions.domain = cookieDomain;
     }
     response.cookies.set('auth-token', token, cookieOptions);
+
+    // Set refresh token cookie if provided
+    if (refreshToken) {
+      const refreshCookieOptions: any = {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: 'lax',
+        expires: expires,
+        path: '/',
+      };
+      if (cookieDomain) {
+        refreshCookieOptions.domain = cookieDomain;
+      }
+      response.cookies.set('refresh-token', refreshToken, refreshCookieOptions);
+    }
+
     console.log('[Register API] Cookie set, secure:', isProduction, 'domain:', cookieOptions.domain || 'none');
 
     return response;

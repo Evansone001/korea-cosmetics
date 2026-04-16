@@ -1,7 +1,7 @@
 // API Client for Flask Backend Integration
 // Uses NEXT_PUBLIC_API_URL for client-side browser calls
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000'
 
 interface User {
     email: string;
@@ -204,47 +204,56 @@ class ApiClient {
     this.retries = options.retries || 3;
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit & { suppressError?: boolean } = {}
-  ): Promise<T> {
-    const url = `${this.baseURL}${endpoint}`;
-
-    // Get auth token from cookies
-    const token = this.getAuthToken();
-
-    const config: RequestInit = {
+  public async request<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  try {
+    const response = await fetch(`${this.baseURL}${endpoint}`, {
+      ...options,
+      credentials: 'include', // ✅ THIS is the fix (cookies go with request)
       headers: {
         'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
         ...options.headers,
       },
-      ...options,
-    };
+    });
 
-    try {
-      const response = await fetch(url, config);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Network error' }));
-        let errorMessage = error.error || `HTTP ${response.status}: ${response.statusText}`;
-        if (error.details) {
-          errorMessage += `: ${JSON.stringify(error.details)}`;
-        }
-        throw new Error(errorMessage);
+      // Handle 404 gracefully by returning null or empty data structure
+      if (response.status === 404) {
+        console.warn(`API endpoint not found: ${endpoint}`);
+        // Return type-safe empty/default response based on expected return type
+        return null as T;
       }
 
-      return await response.json();
-    } catch (error) {
-      if (!options.suppressError) {
-        console.error('API Request Error:', error);
+      // Handle 401 gracefully by returning null (authentication required)
+      if (response.status === 401) {
+        console.warn(`Authentication required for: ${endpoint}`);
+        // Return type-safe empty/default response based on expected return type
+        return null as T;
       }
-      throw error;
+
+      throw new Error(
+        errorData.error || errorData.message || `HTTP error! status: ${response.status}`
+      );
     }
+
+    return await response.json();
+  } catch (error: any) {
+    // If error is already a 404 handled above, re-throw it as null
+    if (error?.message?.includes('404')) {
+      console.warn(`404 error handled gracefully for: ${endpoint}`);
+      return null as T;
+    }
+    console.error('API Request Error:', error);
+    throw error;
   }
+}
 
   private getAuthToken(): string | null {
-    // Try to get token from cookies first
+    // Get token from cookies only (httpOnly cookie is primary)
     if (typeof document !== 'undefined') {
       const cookies = document.cookie.split(';');
       const authCookie = cookies.find(cookie => cookie.trim().startsWith('auth-token='));
@@ -252,36 +261,22 @@ class ApiClient {
         return authCookie.split('=')[1];
       }
     }
-    
-    // Fallback to localStorage
-    if (typeof localStorage !== 'undefined') {
-      return localStorage.getItem('auth-token');
-    }
-    
+
     return null;
   }
 
   private setAuthToken(token: string): void {
-    // Set token in cookies
+    // Set token in cookies only (httpOnly cookie is set by API route)
+    // Note: This method is kept for compatibility but httpOnly cookie is primary
     if (typeof document !== 'undefined') {
       document.cookie = `auth-token=${token}; path=/; max-age=86400; SameSite=Lax`;
-    }
-    
-    // Also set in localStorage as fallback
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('auth-token', token);
     }
   }
 
   private removeAuthToken(): void {
-    // Remove from cookies
+    // Remove from cookies only
     if (typeof document !== 'undefined') {
       document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT';
-    }
-    
-    // Remove from localStorage
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem('auth-token');
     }
   }
 
@@ -429,7 +424,7 @@ class ApiClient {
   }
 
   async getProduct(id: string) {
-    return this.request(`/api/products/${id}`);
+    return this.request<{ product: any }>(`/api/products/${id}`);
   }
 
   // Store endpoints
@@ -737,18 +732,34 @@ class ApiClient {
   }
 
   // Store Management endpoints
-  async getMyStore() {
-    try {
-      return await this.request('/api/stores/my-store', { suppressError: true });
-    } catch (error: any) {
-      // If it's a 404 error (store not found), return null
-      if (error.message?.includes('404') || error.message?.includes('No store found')) {
+async getMyStore() {
+  try {
+    const response = await fetch('/api/store/my-store', {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+
+      if (response.status === 404 || errorData?.error?.includes('No store found')) {
         return null;
       }
-      // For other errors, re-throw
-      throw error;
+
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
+
+    return await response.json();
+  } catch (error: any) {
+    if (error.message?.includes('404') || error.message?.includes('No store found')) {
+      return null;
+    }
+    throw error;
   }
+}
 
   async uploadStoreDocument(file: File, documentType: 'business' | 'identity') {
     const formData = new FormData();

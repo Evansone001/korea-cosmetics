@@ -67,8 +67,8 @@ export default function StoreCatalogPage() {
         category: selectedCategory || undefined,
         search: searchQuery || undefined
       });
-      setProducts(response.products || []);
-      setStoreType(response.store_customer_type || 'B2C');
+      setProducts(response?.products || []);
+      setStoreType(response?.store_customer_type || 'B2C');
     } catch (error) {
       console.error('Failed to fetch catalog:', error);
       toast.error('Failed to load catalog');

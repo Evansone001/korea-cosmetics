@@ -42,7 +42,7 @@ export default function AdminWarehousePage() {
       const params: any = {}
       if (customerTypeFilter !== 'ALL') params.customer_type = customerTypeFilter
       const response = await apiClient.getWarehouseProducts(params)
-      setProducts(response.products || [])
+      setProducts(response?.products || [])
     } catch (error) {
       toast({ title: "Error", description: "Failed to fetch warehouse products", variant: "destructive" })
     } finally {

@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAppDispatch, useAppSelector } from '@/lib/hooks';
+import { addToCart as addToCartAction, updateQuantity as updateQuantityAction, removeFromCart as removeFromCartAction, clearCart } from '@/lib/features/wholesaleCart/wholesaleCartSlice';
+import { WholesaleCartItem } from '@/types';
 import {
   Package,
   ShoppingCart,
@@ -22,7 +25,6 @@ import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api-client';
 import AddressModal from '@/components/AddressModal';
-import { useAppSelector } from '@/lib/hooks';
 
 interface WholesaleProduct {
   id: string;
@@ -46,9 +48,10 @@ interface CartItem extends WholesaleProduct {
 }
 
 export default function WholesaleStorePage() {
+  const dispatch = useAppDispatch();
   const { user } = useAppSelector(state => state?.auth || { user: null });
+  const { items: cartItems, totalItems: cartItemCount, subtotal: cartSubtotal } = useAppSelector(state => state?.wholesaleCart || { items: [], totalItems: 0, subtotal: 0 });
   const [products, setProducts] = useState<WholesaleProduct[]>([]);
-  const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -72,8 +75,8 @@ export default function WholesaleStorePage() {
   const fetchAddresses = async () => {
     try {
       const response = await apiClient.getAddresses();
-      setAddresses(response.addresses || []);
-      if (response.addresses && response.addresses.length > 0) {
+      setAddresses(response?.addresses || []);
+      if (response?.addresses && response.addresses.length > 0) {
         setSelectedAddressId(response.addresses[0].id);
       }
     } catch (error) {
@@ -122,45 +125,23 @@ export default function WholesaleStorePage() {
       return;
     }
 
-    setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
-      if (existing) {
-        return prev.map(item =>
-          item.id === product.id
-            ? { ...item, cartQuantity: item.cartQuantity + quantity }
-            : item
-        );
-      }
-      return [...prev, { ...product, cartQuantity: quantity }];
-    });
-
+    dispatch(addToCartAction({ product, quantity }));
     toast.success(`Added ${quantity} ${product.unit}s to cart`);
+    setShowCart(true);
   };
 
   const updateCartQuantity = (productId: string, delta: number) => {
-    setCart(prev =>
-      prev.map(item => {
-        if (item.id === productId) {
-          const newQuantity = item.cartQuantity + delta;
-          if (newQuantity < item.minOrderQuantity) {
-            toast.error(`Minimum is ${item.minOrderQuantity}`);
-            return item;
-          }
-          return { ...item, cartQuantity: newQuantity };
-        }
-        return item;
-      })
-    );
+    dispatch(updateQuantityAction({ productId, delta }));
   };
 
   const removeFromCart = (productId: string) => {
-    setCart(prev => prev.filter(item => item.id !== productId));
+    dispatch(removeFromCartAction(productId));
   };
 
   const cartTotals = {
-    subtotal: cart.reduce((sum, item) => sum + item.wholesalePrice * item.cartQuantity, 0),
-    itemCount: cart.reduce((sum, item) => sum + item.cartQuantity, 0),
-    discount: discountCode === 'WHOLESALE5' ? cart.reduce((sum, item) => sum + item.wholesalePrice * item.cartQuantity, 0) * 0.05 : 0,
+    subtotal: cartSubtotal,
+    itemCount: cartItemCount,
+    discount: discountCode === 'WHOLESALE5' ? cartSubtotal * 0.05 : 0,
   };
   cartTotals.discount = Math.round(cartTotals.discount * 100) / 100;
   const taxableAmount = cartTotals.subtotal - cartTotals.discount;
@@ -176,14 +157,14 @@ export default function WholesaleStorePage() {
     setPlacingOrder(true);
     try {
       // Purchase each cart item from warehouse
-      const purchasePromises = cart.map(async (item) => {
+      const purchasePromises = cartItems.map(async (item: WholesaleCartItem) => {
         return await apiClient.purchaseFromWholesale(item.id, item.cartQuantity, discountCode, selectedAddressId);
       });
 
       const results = await Promise.allSettled(purchasePromises);
       
       // Check if all purchases succeeded
-      const failedPurchases = results.filter(r => r.status === 'rejected');
+      const failedPurchases = results.filter((r: PromiseSettledResult<any>) => r.status === 'rejected');
       if (failedPurchases.length > 0) {
         toast.error(`${failedPurchases.length} item(s) failed to purchase`);
         return;
@@ -191,7 +172,7 @@ export default function WholesaleStorePage() {
 
       toast.success('B2B order placed successfully and inventory updated!');
       setCheckoutStep('success');
-      setCart([]);
+      dispatch(clearCart());
     } catch (error) {
       toast.error('Failed to place order');
     } finally {
@@ -224,18 +205,18 @@ export default function WholesaleStorePage() {
             Buy Korean beauty products in bulk from our suppliers
           </p>
         </div>
-        <button
-          onClick={() => setShowCart(!showCart)}
+        <Link
+          href="/store/wholesale/cart"
           className="relative flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors"
         >
           <ShoppingCart size={20} />
           Cart
-          {cart.length > 0 && (
+          {cartItemCount > 0 && (
             <span className="absolute -top-2 -right-2 w-5 h-5 bg-pink-500 text-white text-xs rounded-full flex items-center justify-center">
-              {cart.length}
+              {cartItemCount}
             </span>
           )}
-        </button>
+        </Link>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
@@ -349,7 +330,13 @@ export default function WholesaleStorePage() {
                 <h2 className="font-semibold text-slate-900 flex items-center gap-2">
                   <ShoppingCart size={18} />
                   Your Cart
-                  <span className="text-sm text-slate-500">({cart.length} items)</span>
+                  <span className="text-sm text-slate-500">({cartItemCount} items)</span>
+                  <Link
+                    href="/store/wholesale/cart"
+                    className="text-xs text-slate-600 hover:text-slate-900 font-medium ml-auto"
+                  >
+                    View Full Cart
+                  </Link>
                 </h2>
                 <button
                   onClick={() => setShowCart(false)}
@@ -359,7 +346,7 @@ export default function WholesaleStorePage() {
                 </button>
               </div>
 
-              {cart.length === 0 ? (
+              {cartItems.length === 0 ? (
                 <div className="p-8 text-center">
                   <ShoppingCart className="w-12 h-12 text-slate-200 mx-auto mb-3" />
                   <p className="text-slate-500">Your cart is empty</p>
@@ -367,7 +354,7 @@ export default function WholesaleStorePage() {
               ) : (
                 <>
                   <div className="p-4 space-y-4 max-h-96 overflow-y-auto">
-                    {cart.map((item) => (
+                    {cartItems.map((item: WholesaleCartItem) => (
                       <div key={item.id} className="flex gap-3">
                         <div className="w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center flex-shrink-0">
                           <Package className="text-slate-300" size={24} />
@@ -458,15 +445,15 @@ export default function WholesaleStorePage() {
                     {/* Totals */}
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between text-slate-600">
-                        <span>Subtotal ({cartTotals.itemCount} items)</span>
+                        <span>Subtotal ({cartItemCount} items)</span>
                         <span>${cartTotals.subtotal.toFixed(2)}</span>
                       </div>
-                      {cartTotals.discount > 0 && (
+                      {cartTotals.discount > 0 ? (
                         <div className="flex justify-between text-green-600">
                           <span>Discount</span>
                           <span>-${cartTotals.discount.toFixed(2)}</span>
                         </div>
-                      )}
+                      ) : null}
                       <div className="flex justify-between text-slate-600">
                         <span>Tax (8%)</span>
                         <span>${tax.toFixed(2)}</span>

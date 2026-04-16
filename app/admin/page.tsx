@@ -103,10 +103,10 @@ export default function AdminDashboard() {
             `Revenue increased by ${platformMetrics.platformGrowth}% compared to last period`,
             `${platformMetrics.activeStores} active stores on the platform`,
             `${platformMetrics.totalOrders} total orders processed`,
-            `Average store revenue: KES ${platformMetrics.avgStoreRevenue.toLocaleString()}`
+            `Average store revenue: KES ${(platformMetrics.avgStoreRevenue || 0).toLocaleString()}`
         ] : [],
         insights: stores.length > 0 
-            ? `Top performing store ${stores[0]?.name} is leading with KES ${stores[0]?.metrics.revenue.toLocaleString()} in revenue. Consider analyzing their strategies for platform-wide improvements.`
+            ? `Top performing store ${stores[0]?.name} is leading with KES ${(stores[0]?.metrics.revenue || 0).toLocaleString()} in revenue. Consider analyzing their strategies for platform-wide improvements.`
             : 'Loading platform insights...',
         alerts: alerts.length
     }
@@ -208,7 +208,7 @@ export default function AdminDashboard() {
                         <div>
                             <p className="text-sm font-medium text-blue-600 mb-1">Total Revenue</p>
                             <h3 className="text-2xl font-bold text-slate-800">
-                                {currency}{platformMetrics?.totalRevenue.toLocaleString() || '0'}
+                                {currency}{(platformMetrics?.totalRevenue || 0).toLocaleString()}
                             </h3>
                             <div className="flex items-center gap-2 mt-2">
                                 <p className="text-xs text-slate-500">Platform-wide</p>
@@ -240,7 +240,7 @@ export default function AdminDashboard() {
                         <div>
                             <p className="text-sm font-medium text-emerald-600 mb-1">Total Orders</p>
                             <h3 className="text-2xl font-bold text-slate-800">
-                                {platformMetrics?.totalOrders.toLocaleString() || '0'}
+                                {(platformMetrics?.totalOrders || 0).toLocaleString()}
                             </h3>
                             <div className="flex items-center gap-2 mt-2">
                                 <p className="text-xs text-slate-500">All stores</p>
@@ -302,7 +302,7 @@ export default function AdminDashboard() {
                         <div>
                             <p className="text-sm font-medium text-orange-600 mb-1">Total Customers</p>
                             <h3 className="text-2xl font-bold text-slate-800">
-                                {platformMetrics?.totalCustomers.toLocaleString() || '0'}
+                                {(platformMetrics?.totalCustomers || 0).toLocaleString()}
                             </h3>
                             <div className="flex items-center gap-2 mt-2">
                                 <p className="text-xs text-slate-500">Platform-wide</p>
@@ -368,10 +368,10 @@ export default function AdminDashboard() {
                                     tick={{ fontSize: 12, fill: '#64748b' }}
                                     stroke="#cbd5e1"
                                 />
-                                <Tooltip 
+                                <Tooltip
                                     contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                     formatter={(value: number, name: string) => [
-                                        name === 'revenue' ? `KES ${value.toLocaleString()}` : `${value} orders`,
+                                        name === 'revenue' ? `KES ${(value || 0).toLocaleString()}` : `${value || 0} orders`,
                                         name === 'revenue' ? 'Revenue' : 'Orders'
                                     ]}
                                     labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
@@ -496,8 +496,8 @@ export default function AdminDashboard() {
                                         </td>
                                         <td className="py-4">
                                             <div>
-                                                <p className="font-semibold text-slate-800">KES {(store.metrics.revenue/1000).toFixed(0)}k</p>
-                                                <p className="text-xs text-slate-500">{store.metrics.orders} orders</p>
+                                                <p className="font-semibold text-slate-800">KES {((store.metrics?.revenue || 0)/1000).toFixed(0)}k</p>
+                                                <p className="text-xs text-slate-500">{store.metrics?.orders || 0} orders</p>
                                                 {store.trends.isPositive && (
                                                     <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
                                                         <TrendingUp size={10} />

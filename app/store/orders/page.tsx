@@ -106,7 +106,7 @@ export default function StoreOrdersPage() {
           });
 
       // Transform backend orders to frontend format
-      const transformedOrders = response.orders?.map((order: any) => ({
+      const transformedOrders = response?.orders?.map((order: any) => ({
         id: order.id,
         customerName: order.customer?.name || 'Unknown',
         customerEmail: order.customer?.email || '',
@@ -151,12 +151,12 @@ export default function StoreOrdersPage() {
         : await apiClient.getWholesaleOrderStats(30);
 
       if (activeTab === 'customer') {
-        const orderStats = response.statistics || {};
+        const orderStats = response?.statistics || {};
         setStats({
           totalOrders: orderStats.total_orders || 0,
           totalRevenue: orderStats.total_revenue || 0,
-          pending: response.status_breakdown?.order_placed || 0,
-          processing: response.status_breakdown?.processing || 0,
+          pending: response?.status_breakdown?.order_placed || 0,
+          processing: response?.status_breakdown?.processing || 0,
           shipped: response.status_breakdown?.shipped || 0,
           delivered: response.status_breakdown?.delivered || 0
         });
