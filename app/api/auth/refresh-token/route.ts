@@ -22,12 +22,13 @@ export async function POST(request: Request) {
     });
 
     // Forward the new access token as a cookie
-    const isProduction = process.env.NODE_ENV === 'production';
+    const protocol = request.headers.get('x-forwarded-proto') || 'http';
+    const isSecure = protocol === 'https';
     const cookieDomain = process.env.COOKIE_DOMAIN;
     const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const cookieOptions: any = {
       httpOnly: true,
-      secure: isProduction,
+      secure: isSecure,
       sameSite: 'lax',
       expires: expires,
       path: '/',

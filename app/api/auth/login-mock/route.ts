@@ -27,13 +27,14 @@ export async function POST(request: Request) {
   });
 
   // Set mock cookies
-  const isProduction = process.env.NODE_ENV === 'production';
+  const protocol = request.headers.get('x-forwarded-proto') || 'http';
+  const isSecure = protocol === 'https';
   const expires = new Date();
   expires.setDate(expires.getDate() + 30);
 
   response.cookies.set('auth-token', mockToken, {
     httpOnly: true,
-    secure: isProduction,
+    secure: isSecure,
     sameSite: 'lax',
     expires,
     path: '/',
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
 
   response.cookies.set('refresh-token', mockRefreshToken, {
     httpOnly: true,
-    secure: isProduction,
+    secure: isSecure,
     sameSite: 'lax',
     expires,
     path: '/',

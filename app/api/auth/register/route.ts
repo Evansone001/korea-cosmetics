@@ -72,12 +72,13 @@ export async function POST(request: Request) {
     console.log('[Register API] Setting cookie, token length:', token?.length);
     // Calculate expiration: 30 days from now (matching Flask JWT_ACCESS_TOKEN_EXPIRES)
     const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    // Base secure flag on NODE_ENV, not backend URL
-    const isProduction = process.env.NODE_ENV === 'production';
+    // Detect HTTPS from request headers for proper secure cookie flag
+    const protocol = request.headers.get('x-forwarded-proto') || 'http';
+    const isSecure = protocol === 'https';
     const cookieDomain = process.env.COOKIE_DOMAIN;
     const cookieOptions: any = {
       httpOnly: true,
-      secure: isProduction, // MUST be true in production HTTPS
+      secure: isSecure, // TRUE when served over HTTPS
       sameSite: 'lax',
       expires: expires,
       path: '/',
@@ -92,7 +93,7 @@ export async function POST(request: Request) {
     if (refreshToken) {
       const refreshCookieOptions: any = {
         httpOnly: true,
-        secure: isProduction,
+        secure: isSecure,
         sameSite: 'lax',
         expires: expires,
         path: '/',
@@ -103,7 +104,7 @@ export async function POST(request: Request) {
       response.cookies.set('refresh-token', refreshToken, refreshCookieOptions);
     }
 
-    console.log('[Register API] Cookie set, secure:', isProduction, 'domain:', cookieOptions.domain || 'none');
+    console.log('[Register API] Cookie set, secure:', isSecure, 'domain:', cookieOptions.domain || 'none');
 
     return response;
   } catch (error) {
