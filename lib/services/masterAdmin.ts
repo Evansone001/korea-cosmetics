@@ -157,12 +157,15 @@ export const masterAdminService = {
     },
 
     // ==================== ALERTS ====================
-    async acknowledgeAlert(alertId: string): Promise<boolean> {
+    async acknowledgeAlert(alertId: string, userId: string): Promise<boolean> {
         try {
             await fetch(`/api/admin/master/alerts/${alertId}/acknowledge`, {
                 method: 'POST',
                 credentials: 'include',
-                headers: { 'Content-Type': 'application/json' }
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-User-Id': userId
+                }
             })
             return true
         } catch {
