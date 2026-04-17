@@ -50,7 +50,8 @@ export default function CheckoutPage() {
                 
                 for (const [key, value] of Object.entries(cartItems)) {
                     try {
-                        const product = await apiClient.getProduct(key) as Product;
+                        const response = await apiClient.getProduct(key);
+                        const product = response?.product as Product;
                         if (product) {
                             newCartArray.push({ product, quantity: value });
                             price += product.price * value;
