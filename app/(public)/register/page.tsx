@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useAppDispatch } from '@/lib/hooks'
-import { setUser } from '@/lib/features/auth/authSlice'
+import { setUser, setAuthenticated } from '@/lib/features/auth/authSlice'
 import { assets } from '@/assets/assets'
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, CheckCircle } from 'lucide-react'
 import SocialLoginButton from '@/components/auth/SocialLoginButton'
@@ -80,9 +80,12 @@ function RegisterContent() {
             if (response.ok && data.user) {
                 // Update Redux state
                 dispatch(setUser(data.user))
+                dispatch(setAuthenticated(true))
                 
-                // Redirect to intended destination
-                router.push(redirect)
+                // Small delay to ensure cookie is set before redirect
+                setTimeout(() => {
+                    router.push(redirect)
+                }, 100)
             } else {
                 setError(data.error || 'Registration failed')
             }

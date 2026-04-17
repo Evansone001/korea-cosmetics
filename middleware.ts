@@ -33,7 +33,7 @@ export async function middleware(request: NextRequest) {
 
   // Get auth token from cookies
   const token = request.cookies.get('auth-token')?.value
-  console.log('[Middleware] Token found:', !!token)
+  console.log('[Middleware] Token found:', !!token, 'Token length:', token?.length || 0)
 
   // If no auth token and route requires auth, redirect to login
   if (!token && (requiresAuth || requiresSeller || requiresAdmin)) {

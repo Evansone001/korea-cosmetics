@@ -25,6 +25,12 @@ export async function GET(request: NextRequest) {
     const authMatch = cookieHeader.match(/auth-token=([^;]+)/);
     const authToken = authMatch?.[1];
 
+    console.log('[Auth Me API] Cookie check:', {
+      hasCookieHeader: !!cookieHeader,
+      hasAuthToken: !!authToken,
+      cookieHeaderLength: cookieHeader.length,
+    });
+
     if (!authToken) {
       console.log('[Auth Me API] No auth-token found in cookies');
       return NextResponse.json(

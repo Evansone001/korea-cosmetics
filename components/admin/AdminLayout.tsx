@@ -11,7 +11,6 @@ import { useAppSelector, useAppDispatch } from "@/lib/hooks"
 
 const AdminLayout = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter()
-  const dispatch = useAppDispatch()
 
   const authState = useAppSelector(
     state => state?.auth || {
@@ -22,7 +21,7 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
     }
   )
 
-  const { user, isAuthenticated, isLoading: reduxLoading } = authState
+  const { user, isAuthenticated, isLoading: reduxLoading, authChecked } = authState
 
   const isAuthorized = useMemo(() => {
     return user?.role === 'admin' || user?.role === 'super_admin'
@@ -30,7 +29,8 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
 
 
   useEffect(() => {
-    if (reduxLoading) return
+    // Wait for auth check to complete before making any decisions
+    if (!authChecked || reduxLoading) return
 
     if (!isAuthenticated) {
       router.replace('/login?redirect=/admin')
@@ -40,16 +40,18 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
     if (user && !isAuthorized) {
       router.replace('/')
     }
-  }, [reduxLoading, isAuthenticated, isAuthorized, router, user])
+  }, [authChecked, reduxLoading, isAuthenticated, isAuthorized, router, user])
 
   console.log('[AdminLayout] Render check:', {
     reduxLoading,
+    authChecked,
     isAuthenticated,
     isAuthorized,
     userRole: user?.role,
   })
 
-  if (reduxLoading) {
+  // Show loading while auth is being checked
+  if (!authChecked || reduxLoading) {
     console.log('[AdminLayout] Showing Loading spinner')
     return <Loading />
   }

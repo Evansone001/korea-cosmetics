@@ -106,6 +106,13 @@ function LoginContent({ dispatch, redirect }: {
                 setTimeout(() => {
                     console.log('[Login] Executing router.push to:', finalRedirect)
                     router.push(finalRedirect)
+                    // Reset loading state after redirect attempt in case it fails
+                    setTimeout(() => {
+                        if (isLoading) {
+                            console.log('[Login] Redirect may have failed, resetting loading state')
+                            setIsLoading(false)
+                        }
+                    }, 2000)
                 }, 100)
             } else {
                 console.log('[Login] Login failed:', data.error)

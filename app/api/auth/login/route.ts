@@ -131,6 +131,15 @@ export async function POST(request: Request) {
     const protocol = request.headers.get('x-forwarded-proto') || 'http';
     const isSecure = protocol === 'https';
     const cookieDomain = process.env.COOKIE_DOMAIN;
+    
+    console.log('[Login API] Cookie config:', {
+      protocol,
+      isSecure,
+      cookieDomain: cookieDomain || 'none',
+      nodeEnv: process.env.NODE_ENV,
+      hasToken: !!token,
+    });
+    
     const cookieOptions: any = {
       httpOnly: true,
       secure: isSecure, // TRUE when served over HTTPS
