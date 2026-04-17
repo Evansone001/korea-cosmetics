@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react'
 import { Provider } from 'react-redux'
 import { makeStore } from '../lib/store'
 import { useAppDispatch, useAppSelector } from '../lib/hooks'
-import { setUser, setLoading } from '../lib/features/auth/authSlice'
+import { setUser, setLoading, setAuthChecked } from '../lib/features/auth/authSlice'
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
   const dispatch = useAppDispatch()
@@ -39,6 +39,7 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
         dispatch(setUser(null))
       } finally {
         dispatch(setLoading(false))
+        dispatch(setAuthChecked(true))
         console.log('[StoreProvider] Auth initialization complete')
       }
     }
