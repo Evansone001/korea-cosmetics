@@ -119,7 +119,9 @@ export default function CheckoutPage() {
             }
             
             // Call backend API to create order
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000'}/api/orders/create`, {
+            const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000';
+            const apiPath = baseUrl.endsWith('/api') ? '/orders/create' : '/api/orders/create';
+            const response = await fetch(`${baseUrl}${apiPath}`, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({

@@ -50,7 +50,9 @@ const Hero = () => {
         const fetchFeaturedProducts = async () => {
             try {
                 setLoading(true)
-                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000'}/api/products?featured=true&limit=10`)
+                const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000';
+                const apiPath = baseUrl.endsWith('/api') ? '/products' : '/api/products';
+                const response = await fetch(`${baseUrl}${apiPath}?featured=true&limit=10`)
                 
                 if (response.ok) {
                     const data = await response.json()
@@ -77,7 +79,9 @@ const Hero = () => {
                     
                     // If no featured products, fetch regular products as fallback
                     if (mappedProducts.length === 0) {
-                        const fallbackResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000'}/api/products?limit=10`)
+                        const fallbackBaseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000';
+                        const fallbackApiPath = fallbackBaseUrl.endsWith('/api') ? '/products' : '/api/products';
+                        const fallbackResponse = await fetch(`${fallbackBaseUrl}${fallbackApiPath}?limit=10`)
                         if (fallbackResponse.ok) {
                             const fallbackData = await fallbackResponse.json()
                             const fallbackMappedProducts = (fallbackData.products || []).map((product: any) => ({

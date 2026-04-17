@@ -76,7 +76,9 @@ export default function Profile() {
                 }
                 
                 if (token) {
-                    const addressResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000'}/api/addresses`, {
+                    const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000';
+                    const apiPath = baseUrl.endsWith('/api') ? '/addresses' : '/api/addresses';
+                    const addressResponse = await fetch(`${baseUrl}${apiPath}`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`,
@@ -236,7 +238,9 @@ export default function Profile() {
                         }
 
                         if (token) {
-                            const addressesResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000'}/api/addresses`, {
+                            const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000';
+                            const apiPath = baseUrl.endsWith('/api') ? '/addresses' : '/api/addresses';
+                            const addressesResponse = await fetch(`${baseUrl}${apiPath}`, {
                                 headers: {
                                     'Authorization': `Bearer ${token}`,
                                     'Content-Type': 'application/json'
