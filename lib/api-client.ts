@@ -209,7 +209,12 @@ class ApiClient {
   options: RequestInit = {}
 ): Promise<T> {
   try {
-    const response = await fetch(`${this.baseURL}${endpoint}`, {
+    // Fix double /api/ when baseURL ends with /api and endpoint starts with /api/
+    let url = `${this.baseURL}${endpoint}`;
+    if (this.baseURL.endsWith('/api') && endpoint.startsWith('/api/')) {
+      url = `${this.baseURL}${endpoint.slice(4)}`; // Remove '/api' from endpoint
+    }
+    const response = await fetch(url, {
       ...options,
       credentials: 'include', // ✅ THIS is the fix (cookies go with request)
       headers: {
