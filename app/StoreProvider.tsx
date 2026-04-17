@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { Provider } from 'react-redux'
-import { makeStore } from '../lib/store'
-import { useAppDispatch, useAppSelector } from '../lib/hooks'
+import { store } from '../lib/store'
+import { useAppDispatch } from '../lib/hooks'
 import { setUser, setLoading, setAuthChecked } from '../lib/features/auth/authSlice'
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
@@ -50,14 +50,8 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 }
 
 export default function StoreProvider({ children }: { children: React.ReactNode }) {
-  const storeRef = useRef<any>(null)
-
-  if (!storeRef.current) {
-    storeRef.current = makeStore()
-  }
-
   return (
-    <Provider store={storeRef.current}>
+    <Provider store={store}>
       <AuthInitializer>{children}</AuthInitializer>
     </Provider>
   )
