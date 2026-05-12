@@ -37,8 +37,10 @@ const authSlice = createSlice({
       if (typeof window !== 'undefined') {
         if (action.payload) {
           localStorage.setItem('auth-user', JSON.stringify(action.payload))
+          localStorage.setItem('auth-timestamp', Date.now().toString())
         } else {
           localStorage.removeItem('auth-user')
+          localStorage.removeItem('auth-timestamp')
         }
       }
     },
@@ -53,7 +55,13 @@ const authSlice = createSlice({
 
       if (typeof window !== 'undefined') {
         localStorage.removeItem('auth-user')
+        localStorage.removeItem('auth-timestamp')
         localStorage.removeItem('auth-token')
+        localStorage.removeItem('refresh-token')
+
+        // Clear cookies for middleware compatibility
+        document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+        document.cookie = 'refresh-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
       }
     },
 
@@ -94,5 +102,16 @@ export const {
   clearSocialAuthState,
   setAuthenticated,
 } = authSlice.actions
+
+export const isAuthStateValid = (): boolean => {
+  if (typeof window === 'undefined') return false
+
+  const cachedTimestamp = localStorage.getItem('auth-timestamp')
+  if (!cachedTimestamp) return false
+
+  const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+  const age = Date.now() - parseInt(cachedTimestamp)
+  return age < CACHE_DURATION
+}
 
 export default authSlice.reducer

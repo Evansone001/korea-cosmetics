@@ -255,8 +255,8 @@ export default function Orders() {
 
             {/* Order Details Modal */}
             {selectedOrder && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
                         <div className="sticky top-0 bg-white border-b border-slate-200 p-6 flex justify-between items-center">
                             <h2 className="text-2xl font-semibold text-slate-900">Order Details</h2>
                             <button 
@@ -272,12 +272,12 @@ export default function Orders() {
                             <div className="flex items-start justify-between">
                                 <div>
                                     <h3 className="text-lg font-semibold text-slate-900">Order {selectedOrder.id}</h3>
-                                    <p className="text-sm text-slate-500">Placed on {new Date(selectedOrder.date).toLocaleDateString()}</p>
+                                    <p className="text-sm text-slate-500">Placed on {selectedOrder.date ? new Date(selectedOrder.date).toLocaleDateString() : 'N/A'}</p>
                                 </div>
                                 <div className="flex items-center space-x-2">
-                                    {getStatusIcon(selectedOrder.status as Order['status'])}
-                                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedOrder.status as Order['status'])}`}>
-                                        {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
+                                    {getStatusIcon(selectedOrder.status as Order['status'] || 'processing')}
+                                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedOrder.status as Order['status'] || 'processing')}`}>
+                                        {selectedOrder.status ? selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1) : 'Processing'}
                                     </span>
                                 </div>
                             </div>
@@ -286,40 +286,54 @@ export default function Orders() {
                             <div className="border border-slate-200 rounded-lg p-4">
                                 <h4 className="font-medium text-slate-900 mb-4">Order Items</h4>
                                 <div className="space-y-4">
-                                    {selectedOrder.items.map((item: any, index: number) => (
-                                        <div key={index} className="flex items-center space-x-4">
-                                            <div className="w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center">
-                                                <Package className="w-8 h-8 text-slate-400" />
+                                    {selectedOrder.items && selectedOrder.items.length > 0 ? (
+                                        selectedOrder.items.map((item: any, index: number) => (
+                                            <div key={index} className="flex items-center space-x-4">
+                                                <div className="w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center">
+                                                    <Package className="w-8 h-8 text-slate-400" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="font-medium text-slate-900">{item.name}</p>
+                                                    <p className="text-sm text-slate-500">Qty: {item.quantity}</p>
+                                                </div>
+                                                <p className="font-medium text-slate-900">
+                                                    {currency}{(item.price * item.quantity).toLocaleString()}
+                                                </p>
                                             </div>
-                                            <div className="flex-1">
-                                                <p className="font-medium text-slate-900">{item.name}</p>
-                                                <p className="text-sm text-slate-500">Qty: {item.quantity}</p>
-                                            </div>
-                                            <p className="font-medium text-slate-900">
-                                                {currency}{(item.price * item.quantity).toLocaleString()}
-                                            </p>
-                                        </div>
-                                    ))}
+                                        ))
+                                    ) : (
+                                        <p className="text-sm text-slate-500">No items in this order</p>
+                                    )}
                                 </div>
                             </div>
 
                             <div className="grid md:grid-cols-2 gap-6">
                                 {/* Shipping Address */}
-                                <div className="border border-slate-200 rounded-lg p-4">
-                                    <div className="flex items-center space-x-2 mb-3">
-                                        <MapPin className="w-5 h-5 text-slate-600" />
-                                        <h4 className="font-medium text-slate-900">Shipping Address</h4>
+                                {selectedOrder.shippingAddress ? (
+                                    <div className="border border-slate-200 rounded-lg p-4">
+                                        <div className="flex items-center space-x-2 mb-3">
+                                            <MapPin className="w-5 h-5 text-slate-600" />
+                                            <h4 className="font-medium text-slate-900">Shipping Address</h4>
+                                        </div>
+                                        <div className="space-y-1 text-sm">
+                                            <p className="font-medium text-slate-900">{selectedOrder.shippingAddress.name}</p>
+                                            <p className="text-slate-600">{selectedOrder.shippingAddress.street}</p>
+                                            <p className="text-slate-600">
+                                                {selectedOrder.shippingAddress.city}, {selectedOrder.shippingAddress.state} {selectedOrder.shippingAddress.zip}
+                                            </p>
+                                            <p className="text-slate-600">{selectedOrder.shippingAddress.country}</p>
+                                            <p className="text-slate-600">{selectedOrder.shippingAddress.phone}</p>
+                                        </div>
                                     </div>
-                                    <div className="space-y-1 text-sm">
-                                        <p className="font-medium text-slate-900">{selectedOrder.shippingAddress.name}</p>
-                                        <p className="text-slate-600">{selectedOrder.shippingAddress.street}</p>
-                                        <p className="text-slate-600">
-                                            {selectedOrder.shippingAddress.city}, {selectedOrder.shippingAddress.state} {selectedOrder.shippingAddress.zip}
-                                        </p>
-                                        <p className="text-slate-600">{selectedOrder.shippingAddress.country}</p>
-                                        <p className="text-slate-600">{selectedOrder.shippingAddress.phone}</p>
+                                ) : (
+                                    <div className="border border-slate-200 rounded-lg p-4">
+                                        <div className="flex items-center space-x-2 mb-3">
+                                            <MapPin className="w-5 h-5 text-slate-600" />
+                                            <h4 className="font-medium text-slate-900">Shipping Address</h4>
+                                        </div>
+                                        <p className="text-sm text-slate-500">Not available</p>
                                     </div>
-                                </div>
+                                )}
 
                                 {/* Payment Information */}
                                 <div className="border border-slate-200 rounded-lg p-4">
@@ -330,7 +344,7 @@ export default function Orders() {
                                     <div className="space-y-2 text-sm">
                                         <div className="flex justify-between">
                                             <span className="text-slate-600">Payment Method:</span>
-                                            <span className="font-medium text-slate-900">{selectedOrder.paymentMethod}</span>
+                                            <span className="font-medium text-slate-900">{selectedOrder.paymentMethod || 'Not specified'}</span>
                                         </div>
                                         {selectedOrder.trackingNumber && (
                                             <div className="flex justify-between">
@@ -356,22 +370,22 @@ export default function Orders() {
                                 <div className="space-y-2">
                                     <div className="flex justify-between text-sm">
                                         <span className="text-slate-600">Subtotal:</span>
-                                        <span className="font-medium text-slate-900">{currency}{selectedOrder.subtotal.toLocaleString()}</span>
+                                        <span className="font-medium text-slate-900">{currency}{(selectedOrder.subtotal || 0).toLocaleString()}</span>
                                     </div>
                                     <div className="flex justify-between text-sm">
                                         <span className="text-slate-600">Shipping:</span>
                                         <span className="font-medium text-slate-900">
-                                            {selectedOrder.shipping === 0 ? 'Free' : currency + selectedOrder.shipping.toLocaleString()}
+                                            {(selectedOrder.shipping || 0) === 0 ? 'Free' : currency + (selectedOrder.shipping || 0).toLocaleString()}
                                         </span>
                                     </div>
                                     <div className="flex justify-between text-sm">
                                         <span className="text-slate-600">Tax:</span>
-                                        <span className="font-medium text-slate-900">{currency}{selectedOrder.tax.toLocaleString()}</span>
+                                        <span className="font-medium text-slate-900">{currency}{(selectedOrder.tax || 0).toLocaleString()}</span>
                                     </div>
                                     <div className="border-t border-slate-200 pt-2 mt-2">
                                         <div className="flex justify-between">
                                             <span className="font-medium text-slate-900">Total:</span>
-                                            <span className="text-lg font-semibold text-slate-900">{currency}{selectedOrder.total.toLocaleString()}</span>
+                                            <span className="text-lg font-semibold text-slate-900">{currency}{(selectedOrder.total || 0).toLocaleString()}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -421,8 +435,8 @@ export default function Orders() {
 
             {/* Tracking Modal */}
             {showTrackingModal && trackingOrder && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
                         <div className="sticky top-0 bg-white border-b border-slate-200 p-6 flex justify-between items-center">
                             <h2 className="text-2xl font-semibold text-slate-900">Track Order</h2>
                             <button 
@@ -446,8 +460,8 @@ export default function Orders() {
                                     </div>
                                     <div className="text-right">
                                         <p className="text-sm text-blue-600">Status</p>
-                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(trackingOrder.status as Order['status'])}`}>
-                                            {trackingOrder.status.charAt(0).toUpperCase() + trackingOrder.status.slice(1)}
+                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(trackingOrder.status as Order['status'] || 'processing')}`}>
+                                            {trackingOrder.status ? trackingOrder.status.charAt(0).toUpperCase() + trackingOrder.status.slice(1) : 'Processing'}
                                         </span>
                                     </div>
                                 </div>
@@ -471,7 +485,7 @@ export default function Orders() {
                                                 <div className="flex-1 pt-1">
                                                     <p className="font-medium text-slate-900">Order Placed</p>
                                                     <p className="text-sm text-slate-500">Your order has been confirmed and is being processed</p>
-                                                    <p className="text-xs text-slate-400 mt-1">{new Date(trackingOrder.date).toLocaleString()}</p>
+                                                    <p className="text-xs text-slate-400 mt-1">{trackingOrder.date ? new Date(trackingOrder.date).toLocaleString() : 'N/A'}</p>
                                                 </div>
                                             </div>
 
@@ -485,7 +499,7 @@ export default function Orders() {
                                                         <p className="font-medium text-slate-900">Processing</p>
                                                         <p className="text-sm text-slate-500">Your order is being prepared for shipment</p>
                                                         <p className="text-xs text-slate-400 mt-1">
-                                                            {new Date(new Date(trackingOrder.date).getTime() + 86400000).toLocaleString()}
+                                                            {trackingOrder.date ? new Date(new Date(trackingOrder.date).getTime() + 86400000).toLocaleString() : 'N/A'}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -501,7 +515,7 @@ export default function Orders() {
                                                         <p className="font-medium text-slate-900">Shipped</p>
                                                         <p className="text-sm text-slate-500">Your order is on the way to you</p>
                                                         <p className="text-xs text-slate-400 mt-1">
-                                                            {new Date(new Date(trackingOrder.date).getTime() + 172800000).toLocaleString()}
+                                                            {trackingOrder.date ? new Date(new Date(trackingOrder.date).getTime() + 172800000).toLocaleString() : 'N/A'}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -515,9 +529,9 @@ export default function Orders() {
                                                     </div>
                                                     <div className="flex-1 pt-1">
                                                         <p className="font-medium text-slate-900">Delivered</p>
-                                                        <p className="text-sm text-slate-500">Package delivered to {trackingOrder.shippingAddress.name}</p>
+                                                        <p className="text-sm text-slate-500">Package delivered to {trackingOrder.shippingAddress?.name || 'customer'}</p>
                                                         <p className="text-xs text-slate-400 mt-1">
-                                                            {new Date(new Date(trackingOrder.date).getTime() + 259200000).toLocaleString()}
+                                                            {trackingOrder.date ? new Date(new Date(trackingOrder.date).getTime() + 259200000).toLocaleString() : 'N/A'}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -570,8 +584,8 @@ export default function Orders() {
 
             {/* Cancel Order Modal */}
             {showCancelModal && cancelOrder && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl">
                         <div className="sticky top-0 bg-white border-b border-slate-200 p-6 flex justify-between items-center">
                             <h2 className="text-2xl font-semibold text-slate-900">Cancel Order</h2>
                             <button 

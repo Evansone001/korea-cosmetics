@@ -53,7 +53,9 @@ export default function ManageProductPage() {
     price: 0,
     reorder_level: 5,
     store_product_name: '',
-    store_description: ''
+    store_description: '',
+    visibility_notes: '',
+    shipping_preference: 'ship_from_store' as 'ship_from_store' | 'ship_from_warehouse'
   });
 
   const categories = ['Skincare', 'Makeup', 'Haircare', 'Bodycare', 'Fragrance'];
@@ -137,7 +139,9 @@ export default function ManageProductPage() {
       price: product.price,
       reorder_level: product.reorder_level || 5,
       store_product_name: product.store_product_name || '',
-      store_description: product.store_description || ''
+      store_description: product.store_description || '',
+      visibility_notes: (product as any).visibility_notes || '',
+      shipping_preference: (product as any).shipping_preference || 'ship_from_store'
     });
     setIsEditModalOpen(true);
   };
@@ -151,11 +155,13 @@ export default function ManageProductPage() {
     if (!editingProduct) return;
 
     try {
-      await apiClient.updateStoreProduct(editingProduct.id, {
+      await apiClient.updateStoreProductInventory(editingProduct.id, {
         price: editForm.price,
         reorder_level: editForm.reorder_level,
         store_product_name: editForm.store_product_name || undefined,
-        store_description: editForm.store_description || undefined
+        store_description: editForm.store_description || undefined,
+        visibility_notes: editForm.visibility_notes || undefined,
+        shipping_preference: editForm.shipping_preference
       });
       toast.success('Product updated successfully');
       setProducts(prev =>
@@ -167,14 +173,17 @@ export default function ManageProductPage() {
             store_product_name: editForm.store_product_name || undefined,
             store_description: editForm.store_description || undefined,
             name: editForm.store_product_name || p.name,
-            description: editForm.store_description || p.description
+            description: editForm.store_description || p.description,
+            visibility_notes: editForm.visibility_notes,
+            shipping_preference: editForm.shipping_preference
           } : p
         )
       );
       closeEditModal();
-    } catch (error) {
+      fetchStoreProducts();
+    } catch (error: any) {
       console.error('Failed to update product:', error);
-      toast.error('Failed to update product');
+      toast.error(error.message || 'Failed to update product');
     }
   };
 
@@ -470,6 +479,9 @@ export default function ManageProductPage() {
                   min={0}
                   step={0.01}
                 />
+                {editingProduct.cost_price && (
+                  <p className="text-xs text-slate-500 mt-1">Cost: ${editingProduct.cost_price} - Price must be above cost</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Low Stock Alert Level</label>
@@ -481,6 +493,27 @@ export default function ManageProductPage() {
                   min={1}
                 />
                 <p className="text-xs text-slate-500 mt-1">Alert when stock falls below this level</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Visibility Notes (Optional)</label>
+                <textarea
+                  value={editForm.visibility_notes}
+                  onChange={(e) => setEditForm({ ...editForm, visibility_notes: e.target.value })}
+                  placeholder="Notes on why this product is shown/hidden"
+                  rows={2}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Shipping Preference</label>
+                <select
+                  value={editForm.shipping_preference}
+                  onChange={(e) => setEditForm({ ...editForm, shipping_preference: e.target.value as 'ship_from_store' | 'ship_from_warehouse' })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
+                >
+                  <option value="ship_from_store">Ship from Store</option>
+                  <option value="ship_from_warehouse">Ship from Warehouse</option>
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Current Stock</label>

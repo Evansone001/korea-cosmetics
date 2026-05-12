@@ -14,6 +14,7 @@ interface StoreInfo {
     description: string;
     email: string;
     contact: string;
+    phone: string;
     address_line1: string;
     address_line2: string;
     city: string;
@@ -39,6 +40,7 @@ export default function CreateStore() {
         description: "",
         email: "",
         contact: "",
+        phone: "",
         address_line1: "",
         address_line2: "",
         city: "",
@@ -52,6 +54,10 @@ export default function CreateStore() {
 
     const onChangeHandler = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         setStoreInfo({ ...storeInfo, [e.target.name]: e.target.value })
+    }
+
+    const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
+        setStoreInfo({ ...storeInfo, phone: e.target.value })
     }
 
     const handleDocumentUpload = (e: ChangeEvent<HTMLInputElement>, documentType: 'business' | 'identity') => {
@@ -364,27 +370,6 @@ export default function CreateStore() {
                                 <input name="country" onChange={onChangeHandler} value={storeInfo.country} type="text" placeholder="KE" maxLength={2} className="border border-slate-300 outline-slate-400 w-full p-2.5 rounded-lg mt-1" />
                                 <p className="text-xs text-slate-400 mt-1">2-letter code (e.g., KE, US, UK)</p>
                             </div>
-                        </div>
-
-                        {/* Documents Section */}
-                        <div className="w-full mt-8">
-                            <h3 className="text-xl font-semibold text-slate-800 mb-4">Business Documents (Optional)</h3>
-                            <p className="text-slate-500 text-sm mb-4">Upload business registration, tax compliance, or other business documents. PDF only, max 5MB per file.</p>
-
-                            <label className="cursor-pointer">
-                                <input
-                                    type="file"
-                                    accept=".pdf"
-                                    multiple
-                                    onChange={(e) => handleDocumentUpload(e, 'business')}
-                                    className="hidden"
-                                />
-                                <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-pink-500 transition-colors">
-                                    <p className="text-slate-600">Click to upload or drag and drop</p>
-                                    <p className="text-slate-400 text-sm mt-1">PDF files, max 5MB each</p>
-                                </div>
-                            </label>
-
                             {storeInfo.business_documents.length > 0 && (
                                 <div className="mt-4 space-y-2">
                                     {storeInfo.business_documents.map((file, index) => (

@@ -65,8 +65,6 @@ const Hero = () => {
                         image: product.images?.[0] || assets.essence,
                         rating: product.ai_popularity_score || 4.5,
                         badge: product.featured ? "Featured" : "Popular",
-                        wholesalePrice: product.b2b_wholesale_price || Math.floor(product.price * 0.6),
-                        minOrder: product.b2b_moq || 5,
                         description: product.description || "Premium Korean cosmetics product",
                         keyBenefits: [],
                         skinConcerns: "",
@@ -92,8 +90,6 @@ const Hero = () => {
                                 image: product.images?.[0] || assets.essence,
                                 rating: product.ai_popularity_score || 4.5,
                                 badge: "Popular",
-                                wholesalePrice: product.b2b_wholesale_price || Math.floor(product.price * 0.6),
-                                minOrder: product.b2b_moq || 5,
                                 description: product.description || "Premium Korean cosmetics product",
                                 keyBenefits: [],
                                 skinConcerns: "",
@@ -267,21 +263,11 @@ const Hero = () => {
                                             <span className='text-sm text-slate-500 line-through ml-1'>{currency}{product.originalPrice}</span>
                                         </div>
                                     </div>
-                                    <div className='flex items-center justify-between bg-pink-50 rounded-lg p-2'>
-                                        <div>
-                                            <span className='text-sm text-pink-600 font-medium'>B2B Price:</span>
-                                            <span className='text-lg font-bold text-pink-700 ml-1'>{currency}{product.wholesalePrice}</span>
-                                        </div>
-                                        <span className='text-xs text-pink-600'>Min: {product.minOrder}pcs</span>
-                                    </div>
                                 </div>
 
                                 <div className='flex gap-2'>
-                                    <button onClick={() => window.location.href = `/product/${product.id}?type=retail`} className='flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white py-2 rounded-lg hover:from-pink-600 hover:to-rose-600 transition-colors text-sm font-medium'>
-                                        Buy Retail
-                                    </button>
-                                    <button onClick={() => handleB2BClick(product.id)} className='flex-1 border border-pink-300 text-pink-700 py-2 rounded-lg hover:bg-pink-50 transition-colors text-sm font-medium'>
-                                        B2B Order
+                                    <button onClick={() => window.location.href = `/product/${product.id}`} className='flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white py-2 rounded-lg hover:from-pink-600 hover:to-rose-600 transition-colors text-sm font-medium'>
+                                        Buy Now
                                     </button>
                                 </div>
                             </div>

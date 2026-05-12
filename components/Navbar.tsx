@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from "react";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
 import { assets } from "@/assets/assets";
 import { logout, setUser } from "@/lib/features/auth/authSlice";
+import { useCartPath } from "@/hooks/useCartPath";
 
 const Navbar = () => {
     const router = useRouter();
@@ -19,6 +20,7 @@ const Navbar = () => {
     const { user, isAuthenticated } = useAppSelector(state => state?.auth || { user: null, isAuthenticated: false, isLoading: true })
     const profileRef = useRef<HTMLDivElement>(null)
     const deliveryRef = useRef<HTMLDivElement>(null)
+    const { cartPath } = useCartPath()
 
     // Restore auth state from server on mount
     useEffect(() => {
@@ -85,8 +87,8 @@ const Navbar = () => {
     }, [])
 
     const navigation = [
-       
         { name: 'Shop', href: '/shop' },
+        { name: 'Stores', href: '/stores' },
         { name: 'B2B Wholesale', href: '/wholesale' },
         { name: 'Manufacturers', href: '/manufacturers' },
         { name: 'About', href: '/about' },
@@ -188,7 +190,7 @@ const Navbar = () => {
                     {/* Right Actions */}
                     <div className="flex items-center space-x-4">
                         {/* Cart */}
-                        <Link href="/cart" className="relative p-2 text-slate-700 hover:text-blue-600 transition-colors">
+                        <Link href={cartPath} className="relative p-2 text-slate-700 hover:text-blue-600 transition-colors">
                             <ShoppingCart size={24} />
                             {cartCount > 0 && (
                                 <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">

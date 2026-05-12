@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useAppSelector } from '@/lib/hooks'
-import { PackageIcon, DollarSignIcon, ShoppingCartIcon, UsersIcon, Store, Clock, AlertCircle, ArrowRight, Bell } from 'lucide-react'
+import { PackageIcon, DollarSignIcon, ShoppingCartIcon, UsersIcon, Store, Clock, AlertCircle, ArrowRight, Bell, Loader2 } from 'lucide-react'
 import { apiClient, OrderStatsResponse, CustomerStatsResponse, DashboardMetricsResponse } from '@/lib/api-client'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
@@ -14,6 +14,7 @@ interface StoreData {
     rejection_reason?: string
     admin_comments?: string
     created_at: string
+    customer_type?: string
 }
 
 export default function StoreDashboard() {
@@ -29,6 +30,18 @@ export default function StoreDashboard() {
     const [notifications, setNotifications] = useState<any[]>([])
     const [unreadCount, setUnreadCount] = useState(0)
     const [showNotificationDropdown, setShowNotificationDropdown] = useState(false)
+    
+    // Product visibility state
+    const [showOutOfStock, setShowOutOfStock] = useState(true)
+    const [autoFeatureNew, setAutoFeatureNew] = useState(true)
+    const [hideDiscontinued, setHideDiscontinued] = useState(true)
+    
+    // Fulfillment action loading state
+    const [fulfillmentLoading, setFulfillmentLoading] = useState<string | null>(null)
+    
+    // Store products state
+    const [storeProducts, setStoreProducts] = useState<any[]>([])
+    const [productsLoading, setProductsLoading] = useState(false)
 
     useEffect(() => {
         checkStoreStatus()
@@ -47,25 +60,41 @@ export default function StoreDashboard() {
     const checkStoreStatus = async () => {
         try {
             setStoreLoading(true)
+            console.log('Checking store status...')
             const response: any = await apiClient.getMyStore()
+            
+            console.log('Store API response:', response)
 
             if (response && response.store) {
+                console.log('Store found:', response.store.name, 'Status:', response.store.status)
                 setStore(response.store)
                 setStoreError(null)
 
                 // Only fetch dashboard data if store is active
-                if (response.store.status === 'active' && response.store.is_active) {
+                if (response.store.status === 'active') {
                     fetchDashboardData(response.store)
+                    // Load store products with B2C/B2B filtering
+                    loadStoreProducts()
                 }
+            } else if (response && response.error) {
+                console.log('Store API error:', response.error)
+                setStore(null)
+                setStoreError(response.error)
             } else {
+                console.log('No store found in response')
                 // No store found
                 setStore(null)
                 setStoreError(null)
             }
         } catch (error: any) {
-            console.log('Store check error:', error?.message || 'Unknown error')
+            console.error('Store check error:', error)
+            console.error('Error details:', {
+                message: error?.message,
+                response: error?.response?.data,
+                status: error?.response?.status
+            })
             setStore(null)
-            setStoreError(error?.message || 'Error checking store status')
+            setStoreError(error?.response?.data?.error || error?.message || 'Error checking store status')
         } finally {
             setStoreLoading(false)
             setLoading(false)
@@ -171,34 +200,138 @@ export default function StoreDashboard() {
         }
     }
 
+    const loadStoreProducts = async () => {
+        try {
+            if (!store?.id) {
+                return
+            }
+
+            setProductsLoading(true)
+            
+            // Get visibility settings
+            const settings = {
+                showOutOfStock,
+                autoFeatureNew,
+                hideDiscontinued
+            }
+            
+            // Get filtered products based on store's customer type and visibility settings
+            const response = await apiClient.getFilteredProducts(store.id)
+            
+            if (response?.products) {
+                setStoreProducts(response.products)
+                console.log(`Loaded ${response.products.length} products for ${store.customer_type || 'B2C'} store`)
+            }
+            
+        } catch (error: any) {
+            console.error('Failed to load store products:', error)
+            const errorMessage = error?.response?.data?.error || error?.message || 'Failed to load products'
+            toast.error(errorMessage)
+        } finally {
+            setProductsLoading(false)
+        }
+    }
+
+    const handleBulkVisibilityAction = async (action: string) => {
+        try {
+            if (!store?.id) {
+                toast.error('Store not found')
+                return
+            }
+
+            console.log(`Performing bulk visibility action: ${action}`)
+            
+            // Call API to perform bulk visibility action
+            const response = await apiClient.performBulkVisibilityAction(store.id, action)
+            
+            if (response?.products_updated) {
+                toast.success(`${action} completed for ${response.products_updated} products`)
+            } else {
+                toast.success(`${action} action completed successfully`)
+            }
+            
+            // Refresh products to apply changes
+            await loadStoreProducts()
+            
+        } catch (error: any) {
+            console.error('Failed to perform bulk action:', error)
+            const errorMessage = error?.response?.data?.error || error?.message || `Failed to ${action.toLowerCase()} products`
+            toast.error(errorMessage)
+        }
+    }
+
+    const handleVisibilitySettingChange = async (setting: string, value: boolean) => {
+        try {
+            if (!store?.id) {
+                toast.error('Store not found')
+                return
+            }
+
+            console.log(`Updating visibility setting: ${setting} = ${value}`)
+            
+            // Update local state first
+            switch (setting) {
+                case 'showOutOfStock':
+                    setShowOutOfStock(value)
+                    break
+                case 'autoFeatureNew':
+                    setAutoFeatureNew(value)
+                    break
+                case 'hideDiscontinued':
+                    setHideDiscontinued(value)
+                    break
+            }
+            
+            // Call API to update store settings
+            const settings = {
+                showOutOfStock,
+                autoFeatureNew,
+                hideDiscontinued,
+                [setting]: value
+            }
+            
+            await apiClient.updateVisibilitySettings(store.id, settings)
+            toast.success(`Visibility setting updated`)
+            
+            // Refresh products to apply new visibility settings
+            await loadStoreProducts()
+            
+        } catch (error: any) {
+            console.error('Failed to update visibility setting:', error)
+            const errorMessage = error?.response?.data?.error || error?.message || 'Failed to update setting'
+            toast.error(errorMessage)
+        }
+    }
+
+    
     const statCards = [
         {
             title: 'Total Products',
-            value: dashboardMetrics?.metrics.total_products.current || 0,
+            value: dashboardMetrics?.metrics?.total_products?.current || 0,
             icon: PackageIcon,
             bgColor: 'bg-gradient-to-br from-pink-500 to-rose-500',
-            change: dashboardMetrics?.metrics.total_products.change_label || 'No data'
+            change: dashboardMetrics?.metrics?.total_products?.change_label || 'No data'
         },
         {
             title: 'Total Orders',
-            value: dashboardMetrics?.metrics.total_orders.current_month || 0,
+            value: dashboardMetrics?.metrics?.total_orders?.current_month || 0,
             icon: ShoppingCartIcon,
             bgColor: 'bg-gradient-to-br from-rose-500 to-pink-600',
-            change: dashboardMetrics?.metrics.total_orders.change_label || 'No data'
+            change: dashboardMetrics?.metrics?.total_orders?.change_label || 'No data'
         },
         {
             title: 'Total Revenue',
-            value: `$${(dashboardMetrics?.metrics.total_revenue.current_month || 0).toLocaleString()}`,
+            value: `$${(dashboardMetrics?.metrics?.total_revenue?.current_month || 0).toLocaleString()}`,
             icon: DollarSignIcon,
             bgColor: 'bg-gradient-to-br from-pink-600 to-rose-600',
-            change: dashboardMetrics?.metrics.total_revenue.change_label || 'No data'
+            change: dashboardMetrics?.metrics?.total_revenue?.change_label || 'No data'
         },
         {
             title: 'Total Customers',
-            value: dashboardMetrics?.metrics.total_customers.current_month || 0,
+            value: dashboardMetrics?.metrics?.total_customers?.current_month || 0,
             icon: UsersIcon,
             bgColor: 'bg-gradient-to-br from-rose-400 to-pink-500',
-            change: dashboardMetrics?.metrics.total_customers.change_label || 'No data'
+            change: dashboardMetrics?.metrics?.total_customers?.change_label || 'No data'
         }
     ]
 
@@ -206,33 +339,58 @@ export default function StoreDashboard() {
     if (storeLoading) {
         return (
             <div className="flex items-center justify-center h-64">
-                <div className="w-8 h-8 border-2 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
+                <Loader2 className="animate-spin" size={32} />
             </div>
         )
     }
 
-    // No Store - Show CTA to create store
+    // No Store - Show CTA to create store or error message
     if (!store) {
         return (
             <div className="min-h-[60vh] flex items-center justify-center">
                 <div className="text-center max-w-md mx-auto p-8">
-                    <div className="w-20 h-20 bg-gradient-to-br from-pink-100 to-rose-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <Store className="w-10 h-10 text-pink-500" />
-                    </div>
-                    <h2 className="text-2xl font-bold text-slate-900 mb-3">
-                        Create Your Store
-                    </h2>
-                    <p className="text-slate-600 mb-2">
-                        You don&apos;t have a store yet. Set up your store to start selling on KoreaCosmetics' Hub.
-                    </p>
-                    <p className="text-sm text-slate-500 mb-8">
-                        Your application will be reviewed by our admin team before activation.
-                    </p>
+                    {storeError ? (
+                        <>
+                            <div className="w-20 h-20 bg-gradient-to-br from-red-100 to-pink-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <AlertCircle className="w-10 h-10 text-red-500" />
+                            </div>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-3">
+                                Store Access Error
+                            </h2>
+                            <p className="text-red-600 mb-6 bg-red-50 p-4 rounded-lg">
+                                {storeError}
+                            </p>
+                            <div className="space-y-3 text-sm text-slate-600 mb-8">
+                                <p><strong>Possible causes:</strong></p>
+                                <ul className="text-left space-y-1">
+                                    <li>• Your session has expired - try logging out and back in</li>
+                                    <li>• You don&apos;t have seller permissions</li>
+                                    <li>• Store data is missing or corrupted</li>
+                                    <li>• Network connectivity issues</li>
+                                </ul>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="w-20 h-20 bg-gradient-to-br from-pink-100 to-rose-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <Store className="w-10 h-10 text-pink-500" />
+                            </div>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-3">
+                                Create Your Store
+                            </h2>
+                            <p className="text-slate-600 mb-2">
+                                You don&apos;t have a store yet. Set up your store to start selling on KoreaCosmetics&apos; Hub.
+                            </p>
+                            <p className="text-sm text-slate-500 mb-8">
+                                Your application will be reviewed by our admin team before activation.
+                            </p>
+                        </>
+                    )}
                     <Link
                         href="/create-store"
                         className="inline-flex items-center gap-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white px-8 py-3 rounded-xl font-medium hover:shadow-lg hover:scale-105 transition-all"
                     >
-                        Create Store
+                        {storeError ? 'Try Creating New Store' : 'Create Store'}
                         <ArrowRight size={20} />
                     </Link>
                     <p className="mt-6 text-sm text-slate-400">
@@ -241,6 +399,86 @@ export default function StoreDashboard() {
                 </div>
             </div>
         )
+    }
+
+    const handleFulfillmentAction = async (action: string) => {
+        try {
+            if (!store?.id) {
+                toast.error('Store not found')
+                return
+            }
+
+            setFulfillmentLoading(action)
+            console.log(`Performing fulfillment action: ${action}`)
+            
+            let response
+            
+            // Call actual API endpoints for fulfillment actions
+            switch (action) {
+                case 'generate-packing-slips':
+                    response = await apiClient.generatePackingSlips(store.id)
+                    // Handle file download - response is already a Blob
+                    if (response instanceof Blob) {
+                        const url = window.URL.createObjectURL(response)
+                        const a = document.createElement('a')
+                        a.href = url
+                        a.download = `packing-slips-${store.name}-${new Date().toISOString().split('T')[0]}.pdf`
+                        document.body.appendChild(a)
+                        a.click()
+                        document.body.removeChild(a)
+                        window.URL.revokeObjectURL(url)
+                        toast.success('Packing slips downloaded successfully')
+                    }
+                    break
+                    
+                case 'print-shipping-labels':
+                    response = await apiClient.printShippingLabels(store.id)
+                    // Handle file download - response is already a Blob
+                    if (response instanceof Blob) {
+                        const url = window.URL.createObjectURL(response)
+                        const a = document.createElement('a')
+                        a.href = url
+                        a.download = `shipping-labels-${store.name}-${new Date().toISOString().split('T')[0]}.pdf`
+                        document.body.appendChild(a)
+                        a.click()
+                        document.body.removeChild(a)
+                        window.URL.revokeObjectURL(url)
+                        toast.success('Shipping labels downloaded successfully')
+                    }
+                    break
+                    
+                case 'quality-check':
+                    response = await apiClient.performQualityCheck(store.id)
+                    toast.success('Quality check completed')
+                    break
+                    
+                case 'send-order-confirmation':
+                    response = await apiClient.sendOrderConfirmation(store.id)
+                    toast.success('Order confirmation sent to customer')
+                    break
+                    
+                case 'send-shipping-update':
+                    response = await apiClient.sendShippingUpdate(store.id)
+                    toast.success('Shipping update sent to customer')
+                    break
+                    
+                case 'send-delivery-notification':
+                    response = await apiClient.sendDeliveryNotification(store.id)
+                    toast.success('Delivery notification sent to customer')
+                    break
+                    
+                default:
+                    toast.error('Unknown fulfillment action')
+            }
+            
+            checkStoreStatus() // Refresh store data
+        } catch (error: any) {
+            console.error('Failed to perform fulfillment action:', error)
+            const errorMessage = error?.response?.data?.error || error?.message || `Failed to ${action.replace('-', ' ')}`
+            toast.error(errorMessage)
+        } finally {
+            setFulfillmentLoading(null)
+        }
     }
 
     // Store Pending Approval
@@ -570,6 +808,272 @@ export default function StoreDashboard() {
                         )}
                     </div>
                 </div>
+            </div>
+
+            {/* Product Visibility Controls */}
+            <div className="bg-white rounded-xl shadow-sm border border-pink-100 p-6">
+                <h2 className="text-lg font-semibold text-slate-900 mb-4">Product Visibility</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h3 className="font-medium text-slate-700 mb-3">Bulk Actions</h3>
+                        <div className="space-y-3">
+                            <button 
+                                onClick={() => handleBulkVisibilityAction('Set All Products Active')}
+                                className="w-full px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors text-sm font-medium"
+                            >
+                                Set All Products Active
+                            </button>
+                            <button 
+                                onClick={() => handleBulkVisibilityAction('Hide Out of Stock')}
+                                className="w-full px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium"
+                            >
+                                Hide Out of Stock
+                            </button>
+                            <button 
+                                onClick={() => handleBulkVisibilityAction('Feature Top Products')}
+                                className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                            >
+                                Feature Top Products
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 className="font-medium text-slate-700 mb-3">Visibility Settings</h3>
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <label className="text-sm text-slate-600">Show out of stock</label>
+                                <input 
+                                    type="checkbox" 
+                                    checked={showOutOfStock}
+                                    onChange={(e) => handleVisibilitySettingChange('showOutOfStock', e.target.checked)}
+                                    className="rounded border-slate-300" 
+                                />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <label className="text-sm text-slate-600">Auto-feature new</label>
+                                <input 
+                                    type="checkbox" 
+                                    checked={autoFeatureNew}
+                                    onChange={(e) => handleVisibilitySettingChange('autoFeatureNew', e.target.checked)}
+                                    className="rounded border-slate-300" 
+                                />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <label className="text-sm text-slate-600">Hide discontinued</label>
+                                <input 
+                                    type="checkbox" 
+                                    checked={hideDiscontinued}
+                                    onChange={(e) => handleVisibilitySettingChange('hideDiscontinued', e.target.checked)}
+                                    className="rounded border-slate-300" 
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Fulfillment Tools */}
+            <div className="bg-white rounded-xl shadow-sm border border-pink-100 p-6">
+                <h2 className="text-lg font-semibold text-slate-900 mb-4">Fulfillment Tools</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h3 className="font-medium text-slate-700 mb-3">Order Preparation</h3>
+                        <div className="space-y-3">
+                            <button 
+                                onClick={() => handleFulfillmentAction('generate-packing-slips')}
+                                disabled={fulfillmentLoading === 'generate-packing-slips'}
+                                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                            >
+                                {fulfillmentLoading === 'generate-packing-slips' ? (
+                                    <>
+                                        <Loader2 size={16} className="animate-spin" />
+                                        Generating...
+                                    </>
+                                ) : (
+                                    'Generate Packing Slips'
+                                )}
+                            </button>
+                            <button 
+                                onClick={() => handleFulfillmentAction('print-shipping-labels')}
+                                disabled={fulfillmentLoading === 'print-shipping-labels'}
+                                className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                            >
+                                {fulfillmentLoading === 'print-shipping-labels' ? (
+                                    <>
+                                        <Loader2 size={16} className="animate-spin" />
+                                        Generating...
+                                    </>
+                                ) : (
+                                    'Print Shipping Labels'
+                                )}
+                            </button>
+                            <button 
+                                onClick={() => handleFulfillmentAction('quality-check')}
+                                disabled={fulfillmentLoading === 'quality-check'}
+                                className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-purple-400 disabled:cursor-not-allowed transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                            >
+                                {fulfillmentLoading === 'quality-check' ? (
+                                    <>
+                                        <Loader2 size={16} className="animate-spin" />
+                                        Processing...
+                                    </>
+                                ) : (
+                                    'Quality Check'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 className="font-medium text-slate-700 mb-3">Customer Communication</h3>
+                        <div className="space-y-3">
+                            <button 
+                                onClick={() => handleFulfillmentAction('send-order-confirmation')}
+                                disabled={fulfillmentLoading === 'send-order-confirmation'}
+                                className="w-full px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:bg-pink-400 disabled:cursor-not-allowed transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                            >
+                                {fulfillmentLoading === 'send-order-confirmation' ? (
+                                    <>
+                                        <Loader2 size={16} className="animate-spin" />
+                                        Sending...
+                                    </>
+                                ) : (
+                                    'Send Order Confirmation'
+                                )}
+                            </button>
+                            <button 
+                                onClick={() => handleFulfillmentAction('send-shipping-update')}
+                                disabled={fulfillmentLoading === 'send-shipping-update'}
+                                className="w-full px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                            >
+                                {fulfillmentLoading === 'send-shipping-update' ? (
+                                    <>
+                                        <Loader2 size={16} className="animate-spin" />
+                                        Sending...
+                                    </>
+                                ) : (
+                                    'Send Shipping Update'
+                                )}
+                            </button>
+                            <button 
+                                onClick={() => handleFulfillmentAction('send-delivery-notification')}
+                                disabled={fulfillmentLoading === 'send-delivery-notification'}
+                                className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                            >
+                                {fulfillmentLoading === 'send-delivery-notification' ? (
+                                    <>
+                                        <Loader2 size={16} className="animate-spin" />
+                                        Sending...
+                                    </>
+                                ) : (
+                                    'Delivery Notification'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* B2C Filtered Products */}
+            <div className="bg-white rounded-xl shadow-sm border border-pink-100 p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold text-slate-900">
+                        Your Products ({store?.customer_type || 'B2C'})
+                    </h2>
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                        {productsLoading && (
+                            <>
+                                <Loader2 size={16} className="animate-spin" />
+                                Loading...
+                            </>
+                        )}
+                        {!productsLoading && (
+                            <>
+                                <span>{storeProducts.length} products</span>
+                                {store?.customer_type === 'B2C' && (
+                                    <span className="px-2 py-1 bg-pink-100 text-pink-700 rounded-full text-xs">
+                                        B2C Store
+                                    </span>
+                                )}
+                                {store?.customer_type === 'B2B' && (
+                                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">
+                                        B2B Store
+                                    </span>
+                                )}
+                            </>
+                        )}
+                    </div>
+                </div>
+                
+                {storeProducts.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {storeProducts.slice(0, 6).map((product) => (
+                            <div key={product.id} className="border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                                <div className="flex items-start justify-between mb-2">
+                                    <h3 className="font-medium text-slate-900 text-sm truncate flex-1">
+                                        {product.name}
+                                    </h3>
+                                    {product.featured && (
+                                        <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs ml-2">
+                                            Featured
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-xs text-slate-500 mb-2 line-clamp-2">
+                                    {product.description}
+                                </p>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-lg font-bold text-pink-600">
+                                        ${product.price}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-xs px-2 py-1 rounded-full ${
+                                            product.stock > 0 
+                                                ? 'bg-green-100 text-green-700' 
+                                                : 'bg-red-100 text-red-700'
+                                        }`}>
+                                            {product.stock > 0 ? `In Stock (${product.stock})` : 'Out of Stock'}
+                                        </span>
+                                        <span className={`text-xs px-2 py-1 rounded-full ${
+                                            product.visibility_status === 'ACTIVE' 
+                                                ? 'bg-blue-100 text-blue-700' 
+                                                : 'bg-grey-100 text-grey-700'
+                                        }`}>
+                                            {product.visibility_status}
+                                        </span>
+                                    </div>
+                                </div>
+                                {product.visibility_notes && (
+                                    <p className="text-xs text-slate-400 mt-2 italic">
+                                        Note: {product.visibility_notes}
+                                    </p>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-8">
+                        <PackageIcon size={48} className="mx-auto text-slate-300 mb-4" />
+                        <p className="text-slate-500">
+                            {productsLoading 
+                                ? 'Loading products...' 
+                                : store?.customer_type === 'B2C' 
+                                    ? 'No B2C products available. Contact admin to add products for your store.'
+                                    : 'No B2B products available. Contact admin to add wholesale products for your store.'
+                            }
+                        </p>
+                    </div>
+                )}
+                
+                {storeProducts.length > 6 && (
+                    <div className="mt-4 text-center">
+                        <Link 
+                            href="/store/catalog" 
+                            className="text-pink-600 hover:text-pink-700 font-medium text-sm"
+                        >
+                            View all {storeProducts.length} products →
+                        </Link>
+                    </div>
+                )}
             </div>
 
             {/* Quick Actions */}

@@ -128,9 +128,20 @@ export default function AdminUsers() {
     }
 
     // API functions for user management
+    const getTokenFromCookies = () => {
+        if (typeof window !== 'undefined') {
+            const cookies = document.cookie.split(';')
+            const authCookie = cookies.find(cookie => cookie.trim().startsWith('auth-token='))
+            if (authCookie) {
+                return authCookie.split('=')[1]
+            }
+        }
+        return null
+    }
+
     const updateUserRole = async (userId: string, newRole: string) => {
         try {
-            const token = localStorage.getItem('token')
+            const token = getTokenFromCookies()
             const response = await fetch(`/api/auth/admin/users/${userId}/role`, {
                 method: 'PUT',
                 headers: { 
@@ -156,7 +167,7 @@ export default function AdminUsers() {
 
     const updateUserStatus = async (userId: string, isActive: boolean) => {
         try {
-            const token = localStorage.getItem('token')
+            const token = getTokenFromCookies()
             const response = await fetch(`/api/auth/admin/users/${userId}/status`, {
                 method: 'PUT',
                 headers: { 

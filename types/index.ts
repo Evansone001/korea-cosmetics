@@ -54,6 +54,7 @@ export interface Product {
   category: string;
   storeId: string;
   inStock: boolean;
+  stock_quantity?: number;
   store?: Store;
   rating: Rating[];
   createdAt: string;

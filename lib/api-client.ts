@@ -1,5 +1,8 @@
 // API Client for Flask Backend Integration
 // Uses NEXT_PUBLIC_API_URL for client-side browser calls
+// Now uses Axios for HTTP requests
+
+import axiosInstance from './axios';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000'
 
@@ -177,6 +180,113 @@ export interface StoreCatalogResponse {
   offset: number;
 }
 
+// Store Product Management Interfaces
+export interface StoreProduct {
+  id: string;
+  productId: string;
+  productName: string;
+  name?: string;
+  description: string;
+  price: number;
+  store_price?: number;
+  comparePrice?: number;
+  stockQuantity: number;
+  store_moq?: number;
+  warehouse_stock?: number;
+  inStock: boolean;
+  status: 'active' | 'inactive' | 'pending';
+  featured: boolean;
+  sortOrder: number;
+  category: string;
+  brand: string;
+  images: string[];
+  storeInfo?: {
+    storeId: string;
+    storeName: string;
+    storeDescription: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoreProductCatalogResponse {
+  products: StoreProduct[];
+  pagination: {
+    total: number;
+    offset: number;
+    limit: number;
+    has_more: boolean;
+  };
+  store: {
+    id: string;
+    name: string;
+    description: string;
+    logo: string;
+    customerType: string;
+  };
+}
+
+export interface AvailableProduct {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  brand: string;
+  warehouseStock: number;
+  customerType: 'B2C' | 'B2B' | 'BOTH';
+  images: string[];
+  createdAt: string;
+}
+
+export interface AvailableProductsResponse {
+  products: AvailableProduct[];
+  pagination: {
+    total: number;
+    offset: number;
+    limit: number;
+    has_more: boolean;
+  };
+}
+
+export interface AddProductToCatalogRequest {
+  productId: string;
+  price: number;
+  stockQuantity: number;
+  featured?: boolean;
+  customDescription?: string;
+}
+
+export interface BulkUpdateRequest {
+  operation: 'activate' | 'deactivate' | 'toggle_featured' | 'update_pricing';
+  productIds: string[];
+  priceAdjustment?: number;
+  adjustmentType?: 'absolute' | 'percentage';
+}
+
+export interface ResellerApplication {
+  id: string;
+  business_name: string;
+  business_description: string;
+  business_phone: string;
+  business_email: string;
+  business_address: string;
+  business_city: string;
+  business_country: string;
+  tax_id: string;
+  business_license: string;
+  years_in_business: number;
+  website_url: string;
+  status?: string;
+  created_at?: string;
+}
+
+export interface ResellerApplicationResponse {
+  error: string;
+  application: ResellerApplication;
+  message?: string;
+}
+
 export interface WarehouseProduct extends Product {
   warehouse_stock: number;
   b2c_retail_price: number | null;
@@ -191,6 +301,52 @@ export interface WarehouseProductsResponse {
   total: number;
   limit: number;
   offset: number;
+}
+
+export interface WarehouseOrder {
+  id: string;
+  storeId: string;
+  storeName: string;
+  items: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+  }>;
+  subtotal: number;
+  total: number;
+  status: 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  paymentStatus: 'pending' | 'paid';
+  trackingNumber?: string;
+  shippingAddress: {
+    name: string;
+    address: string;
+    city: string;
+    country: string;
+    phone: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminWarehouseOrdersResponse {
+  orders: WarehouseOrder[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  parent_id?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CategoriesResponse {
+  categories: Category[];
 }
 
 class ApiClient {
@@ -214,48 +370,89 @@ class ApiClient {
     if (this.baseURL.endsWith('/api') && endpoint.startsWith('/api/')) {
       url = `${this.baseURL}${endpoint.slice(4)}`; // Remove '/api' from endpoint
     }
-    const response = await fetch(url, {
-      ...options,
-      credentials: 'include', // ✅ THIS is the fix (cookies go with request)
+
+    // Convert fetch options to axios config
+    const axiosConfig: any = {
+      method: options.method || 'GET',
+      url: url,
+      data: options.body,
       headers: {
-        'Content-Type': 'application/json',
         ...options.headers,
       },
-    });
+    };
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+    const response = await axiosInstance.request(axiosConfig);
 
-      // Handle 404 gracefully by returning null or empty data structure
-      if (response.status === 404) {
-        console.warn(`API endpoint not found: ${endpoint}`);
-        // Return type-safe empty/default response based on expected return type
-        return null as T;
-      }
-
-      // Handle 401 gracefully by returning null (authentication required)
-      if (response.status === 401) {
-        console.warn(`Authentication required for: ${endpoint}`);
-        // Return type-safe empty/default response based on expected return type
-        return null as T;
-      }
-
-      throw new Error(
-        errorData.error || errorData.message || `HTTP error! status: ${response.status}`
-      );
-    }
-
-    return await response.json();
+    return response.data;
   } catch (error: any) {
-    // If error is already a 404 handled above, re-throw it as null
-    if (error?.message?.includes('404')) {
-      console.warn(`404 error handled gracefully for: ${endpoint}`);
+    // Handle 404 gracefully
+    if (error.response?.status === 404) {
+      console.warn(`API endpoint not found: ${endpoint}`);
       return null as T;
     }
-    console.error('API Request Error:', error);
-    throw error;
+
+    // Handle 401 gracefully
+    if (error.response?.status === 401) {
+      console.warn(`Authentication required for: ${endpoint}`);
+      return null as T;
+    }
+
+    // Handle other errors
+    const errorMessage = error.response?.data?.error || 
+                        error.response?.data?.message || 
+                        error.message || 
+                        'Request failed';
+    
+    throw new Error(errorMessage);
   }
 }
+
+  public async downloadFile(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<Blob> {
+    try {
+      // Fix double /api/ when baseURL ends with /api and endpoint starts with /api/
+      let url = `${this.baseURL}${endpoint}`;
+      if (this.baseURL.endsWith('/api') && endpoint.startsWith('/api/')) {
+        url = `${this.baseURL}${endpoint.slice(4)}`; // Remove '/api' from endpoint
+      }
+
+      // Convert fetch options to axios config
+      const axiosConfig: any = {
+        method: options.method || 'GET',
+        url: url,
+        data: options.body,
+        headers: {
+          ...options.headers,
+        },
+        responseType: 'blob', // Important for file downloads
+      };
+
+      const response = await axiosInstance.request(axiosConfig);
+      return response.data;
+    } catch (error: any) {
+      // Handle 404 gracefully
+      if (error.response?.status === 404) {
+        console.warn(`API endpoint not found: ${endpoint}`);
+        throw new Error('File not found');
+      }
+
+      // Handle 401 gracefully
+      if (error.response?.status === 401) {
+        console.warn(`Authentication required for: ${endpoint}`);
+        throw new Error('Authentication required');
+      }
+
+      // Handle other errors
+      const errorMessage = error.response?.data?.error || 
+                          error.response?.data?.message || 
+                          error.message || 
+                          'Download failed';
+      
+      throw new Error(errorMessage);
+    }
+  }
 
   private getAuthToken(): string | null {
     // Get token from cookies only (httpOnly cookie is primary)
@@ -583,6 +780,33 @@ class ApiClient {
     return this.request(`/api/orders/${orderId}`);
   }
 
+  async getAdminWarehouseOrders(params: {
+    status?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<AdminWarehouseOrdersResponse> {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        searchParams.append(key, value.toString());
+      }
+    });
+    const query = searchParams.toString();
+    return this.request<AdminWarehouseOrdersResponse>(`/api/admin/wholesale-orders${query ? `?${query}` : ''}`);
+  }
+
+  async handleWarehouseOrderAction(orderId: string, action: string, trackingNumber?: string) {
+    return this.request('/api/admin/wholesale-orders', {
+      method: 'POST',
+      body: JSON.stringify({
+        orderId,
+        action,
+        ...(trackingNumber && { trackingNumber })
+      })
+    });
+  }
+
   async fulfillOrder(orderId: string, trackingNumber?: string, carrier?: string) {
     return this.request(`/api/orders/${orderId}/fulfill`, {
       method: 'POST',
@@ -619,11 +843,13 @@ class ApiClient {
     });
   }
 
-  async updateStoreProduct(storeProductId: string, data: {
+  async updateStoreProductInventory(storeProductId: string, data: {
     store_product_name?: string;
     store_description?: string;
     price?: number;
     reorder_level?: number;
+    visibility_notes?: string;
+    shipping_preference?: 'ship_from_store' | 'ship_from_warehouse';
   }) {
     return this.request(`/api/inventory/${storeProductId}`, {
       method: 'PUT',
@@ -736,30 +962,13 @@ class ApiClient {
     });
   }
 
-  // Store Management endpoints
+  // Store Management endpoints - Fixed endpoint from /api/store/my-store to /api/stores/my-store
 async getMyStore() {
   try {
-    const response = await fetch('/api/store/my-store', {
-      method: 'GET',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-
-      if (response.status === 404 || errorData?.error?.includes('No store found')) {
-        return null;
-      }
-
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-    }
-
-    return await response.json();
+    const response = await axiosInstance.get('/api/stores/my-store');
+    return response.data;
   } catch (error: any) {
-    if (error.message?.includes('404') || error.message?.includes('No store found')) {
+    if (error.response?.status === 404 || error.response?.data?.error?.includes('No store found')) {
       return null;
     }
     throw error;
@@ -771,23 +980,13 @@ async getMyStore() {
     formData.append('file', file);
     formData.append('document_type', documentType);
 
-    const url = `${this.baseURL}/api/stores/documents`;
-    const token = this.getAuthToken();
-
-    const response = await fetch(url, {
-      method: 'POST',
+    const response = await axiosInstance.post('/api/stores/documents', formData, {
       headers: {
-        ...(token && { Authorization: `Bearer ${token}` }),
+        'Content-Type': 'multipart/form-data',
       },
-      body: formData,
     });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Network error' }));
-      throw new Error(error.error || `HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    return await response.json();
+    return response.data;
   }
 
   async deleteStoreDocument(documentId: string) {
@@ -912,8 +1111,8 @@ async getMyStore() {
     });
   }
 
-  async getCategories() {
-    return this.request('/api/categories', {
+  async getCategories(): Promise<CategoriesResponse> {
+    return this.request<CategoriesResponse>('/api/categories', {
       method: 'GET',
     });
   }
@@ -979,28 +1178,44 @@ async getMyStore() {
     });
   }
 
-  // Upload endpoint
-  async uploadProductImage(file: File): Promise<{ url: string; filename: string }> {
+  // Upload endpoint - route through Next.js API proxy to handle authentication
+  async uploadProductImage(file: File): Promise<{
+    url: string;
+    filename: string;
+  }> {
     const formData = new FormData();
     formData.append('file', file);
 
-    const url = `${this.baseURL}/api/products/upload`;
-    const token = this.getAuthToken();
-
-    const response = await fetch(url, {
+    // Route through Next.js API proxy at /api/products/upload
+    // The Next.js API route will handle authentication and forward to backend
+    const response = await fetch('/api/products/upload', {
       method: 'POST',
-      headers: {
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
       body: formData,
+      credentials: 'include', // Include cookies for authentication
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Network error' }));
-      throw new Error(error.error || `HTTP ${response.status}: ${response.statusText}`);
+      const error = await response.json();
+      throw new Error(error.error || error.message || 'Upload failed');
     }
 
-    return await response.json();
+    return response.json();
+  }
+
+  // ==================== IMPORT API (Admin) ====================
+
+  async downloadImportTemplate(): Promise<string> {
+    const response = await axiosInstance.get('/api/products/import/template', {
+      responseType: 'blob',
+    });
+    return response.data;
+  }
+
+  async importProducts(products: any[]): Promise<{ success: boolean; imported: number; errors: number; skipped: number }> {
+    return this.request('/api/products/import/execute', {
+      method: 'POST',
+      body: JSON.stringify({ products }),
+    });
   }
 
   // ==================== WAREHOUSE API (Admin) ====================
@@ -1054,10 +1269,10 @@ async getMyStore() {
     return this.request<StoreCatalogResponse>(`/api/admin/warehouse/store/catalog?${queryParams.toString()}`);
   }
 
-  async purchaseFromWarehouse(productId: string, quantity: number) {
-    return this.request('/api/admin/warehouse/store/purchase', {
+  async purchaseFromWarehouse(data: { product_id: string; quantity: number; shipping_method?: string; notes?: string }) {
+    return this.request('/api/store/wholesale/purchase', {
       method: 'POST',
-      body: JSON.stringify({ product_id: productId, quantity }),
+      body: JSON.stringify(data),
     });
   }
 
@@ -1117,7 +1332,42 @@ async getMyStore() {
     if (storeId) queryParams.append('store_id', storeId);
     
     const queryString = queryParams.toString();
-    return this.request<DashboardMetricsResponse>(`/api/admin/metrics/store/dashboard${queryString ? `?${queryString}` : ''}`);
+    return this.request<DashboardMetricsResponse>(`/api/reports/dashboard${queryString ? `?${queryString}` : ''}`);
+  }
+
+  // Reseller Application API
+  async createResellerApplication(applicationData: {
+    business_name: string;
+    business_description: string;
+    business_phone: string;
+    business_email: string;
+    business_address: string;
+    business_city: string;
+    business_country: string;
+    tax_id: string;
+    business_license: string;
+    years_in_business: number;
+    website_url: string;
+  }): Promise<ResellerApplicationResponse> {
+    return this.request<ResellerApplicationResponse>('/api/reseller-applications', {
+      method: 'POST',
+      body: JSON.stringify(applicationData),
+    });
+  }
+
+  async uploadResellerDocument(applicationId: string, file: File, documentType: string) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('document_type', documentType);
+    
+    return this.request(`/api/reseller-applications/${applicationId}/documents`, {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+  async getMyResellerApplication() {
+    return this.request('/api/reseller-applications/my-application');
   }
 
   // Cart endpoints
@@ -1147,6 +1397,233 @@ async getMyStore() {
       method: 'PUT',
       body: JSON.stringify({ status }),
     });
+  }
+
+  // ==================== STORE PRODUCT MANAGEMENT API ====================
+
+  // Get store's product catalog
+  async getStoreProductCatalog(params?: { status?: string; featured?: boolean; category?: string; limit?: number; offset?: number }): Promise<StoreProductCatalogResponse> {
+    const queryParams = new URLSearchParams();
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.featured !== undefined) queryParams.append('featured', params.featured.toString());
+    if (params?.category) queryParams.append('category', params.category);
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.offset) queryParams.append('offset', params.offset.toString());
+
+    return this.request<StoreProductCatalogResponse>(`/api/store/products/catalog?${queryParams.toString()}`);
+  }
+
+  // Get available products to add to store catalog
+  async getAvailableProducts(params?: { category?: string; brand?: string; query?: string; limit?: number; offset?: number }): Promise<AvailableProductsResponse> {
+    const queryParams = new URLSearchParams();
+    if (params?.category) queryParams.append('category', params.category);
+    if (params?.brand) queryParams.append('brand', params.brand);
+    if (params?.query) queryParams.append('query', params.query);
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.offset) queryParams.append('offset', params.offset.toString());
+
+    return this.request<AvailableProductsResponse>(`/api/store/products/available?${queryParams.toString()}`);
+  }
+
+  // Add product to store catalog
+  async addProductToCatalog(data: AddProductToCatalogRequest) {
+    return this.request('/api/store/products/add', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Update store product
+  async updateStoreProduct(id: string, data: Partial<StoreProduct>) {
+    return this.request(`/api/store/products/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Remove product from store catalog
+  async removeProductFromCatalog(id: string) {
+    return this.request(`/api/store/products/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Bulk update store products
+  async bulkUpdateStoreProducts(data: BulkUpdateRequest) {
+    return this.request('/api/store/products/bulk-update', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // ==================== CUSTOMER-FACING STORE API ====================
+
+  // Get public store catalog for customers
+  async getPublicStoreCatalog(storeId: string, params?: { status?: string; featured?: boolean; category?: string; limit?: number; offset?: number }): Promise<StoreCatalogResponse> {
+    const queryParams = new URLSearchParams();
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.featured !== undefined) queryParams.append('featured', params.featured.toString());
+    if (params?.category) queryParams.append('category', params.category);
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.offset) queryParams.append('offset', params.offset.toString());
+
+    return this.request<StoreCatalogResponse>(`/api/products/stores/${storeId}/catalog?${queryParams.toString()}`);
+  }
+
+  // Get store's featured products for customers
+  async getStoreFeaturedProducts(storeId: string, params?: { limit?: number }): Promise<{ products: StoreProduct[]; store: any }> {
+    const queryParams = new URLSearchParams();
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+
+    return this.request(`/api/products/stores/${storeId}/featured?${queryParams.toString()}`);
+  }
+
+  // ==================== B2C ORDER TRACKING API ====================
+  // Get B2C order tracking information
+  async getB2COrderTracking(orderNumber: string): Promise<any> {
+    return this.request(`/api/b2c/orders/${orderNumber}/tracking`);
+  }
+
+  // Get B2C orders for admin management
+  async getB2COrders(params?: { status?: string; search?: string; limit?: number; offset?: number }): Promise<any> {
+    const queryParams = new URLSearchParams();
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.offset) queryParams.append('offset', params.offset.toString());
+
+    return this.request(`/api/admin/b2c/orders?${queryParams.toString()}`);
+  }
+
+  // Auto-assign B2C order to optimal store
+  async autoAssignB2COrder(orderId: string, storeId?: string): Promise<any> {
+    return this.request('/api/admin/b2c/orders/auto-assign', {
+      method: 'POST',
+      body: JSON.stringify({ orderId, storeId }),
+    });
+  }
+
+  // Manual assign B2C order to specific store
+  async manualAssignB2COrder(orderId: string, storeId: string): Promise<any> {
+    return this.request('/api/admin/b2c/orders/manual-assign', {
+      method: 'POST',
+      body: JSON.stringify({ orderId, storeId }),
+    });
+  }
+
+  // Get available stores for order assignment
+  async getB2CStores(): Promise<any> {
+    return this.request('/api/admin/b2c/stores');
+  }
+
+  // ==================== FULFILLMENT API ====================
+  // Generate packing slips for store orders
+  async generatePackingSlips(storeId: string, orderIds?: string[]): Promise<Blob> {
+    return this.downloadFile(`/api/orders/store/${storeId}/fulfillment/packing-slips`, {
+      method: 'POST',
+      body: JSON.stringify({ orderIds }),
+    });
+  }
+
+  // Print shipping labels for store orders
+  async printShippingLabels(storeId: string, orderIds?: string[]): Promise<Blob> {
+    return this.downloadFile(`/api/orders/store/${storeId}/fulfillment/shipping-labels`, {
+      method: 'POST',
+      body: JSON.stringify({ orderIds }),
+    });
+  }
+
+  // Perform quality check for store orders
+  async performQualityCheck(storeId: string, orderIds?: string[]): Promise<any> {
+    return this.request(`/api/orders/store/${storeId}/fulfillment/quality-check`, {
+      method: 'POST',
+      body: JSON.stringify({ orderIds }),
+    });
+  }
+
+  // Send order confirmation to customers
+  async sendOrderConfirmation(storeId: string, orderIds?: string[]): Promise<any> {
+    return this.request(`/api/orders/store/${storeId}/fulfillment/order-confirmation`, {
+      method: 'POST',
+      body: JSON.stringify({ orderIds }),
+    });
+  }
+
+  // Send shipping update to customers
+  async sendShippingUpdate(storeId: string, orderIds?: string[]): Promise<any> {
+    return this.request(`/api/orders/store/${storeId}/fulfillment/shipping-update`, {
+      method: 'POST',
+      body: JSON.stringify({ orderIds }),
+    });
+  }
+
+  // Send delivery notification to customers
+  async sendDeliveryNotification(storeId: string, orderIds?: string[]): Promise<any> {
+    return this.request(`/api/orders/store/${storeId}/fulfillment/delivery-notification`, {
+      method: 'POST',
+      body: JSON.stringify({ orderIds }),
+    });
+  }
+
+  // ==================== STORE VISIBILITY API ====================
+  // Get store visibility settings
+  async getVisibilitySettings(storeId: string): Promise<any> {
+    return this.request(`/api/stores/${storeId}/visibility/settings`, {
+      method: 'GET',
+    });
+  }
+
+  // Update store visibility settings
+  async updateVisibilitySettings(storeId: string, settings: any): Promise<any> {
+    return this.request(`/api/stores/${storeId}/visibility/settings`, {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  }
+
+  // Perform bulk visibility actions
+  async performBulkVisibilityAction(storeId: string, action: string): Promise<any> {
+    return this.request(`/api/stores/${storeId}/visibility/bulk-action`, {
+      method: 'PUT',
+      body: JSON.stringify({ action }),
+    });
+  }
+
+  // Get filtered products for store
+  async getFilteredProducts(storeId: string): Promise<any> {
+    return this.request(`/api/stores/${storeId}/products/filtered`, {
+      method: 'GET',
+    });
+  }
+
+  // Update individual product visibility
+  async updateProductVisibility(storeId: string, productId: string, settings: any): Promise<any> {
+    return this.request(`/api/stores/${storeId}/product/${productId}/visibility`, {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  }
+
+  // ==================== STORE SETTINGS API ====================
+  // Update store visibility settings
+  async updateStoreSettings(storeId: string, settings: any): Promise<any> {
+    return this.request('/api/store/settings', {
+      method: 'POST',
+      body: JSON.stringify({ storeId, ...settings }),
+    });
+  }
+
+  // Bulk update product visibility
+  async updateBulkProductVisibility(storeId: string, action: string, productIds?: string[]): Promise<any> {
+    return this.request('/api/store/products/bulk-visibility', {
+      method: 'POST',
+      body: JSON.stringify({ storeId, action, productIds }),
+    });
+  }
+
+  // Get store fulfillment analytics
+  async getStoreFulfillmentAnalytics(storeId: string): Promise<any> {
+    return this.request(`/api/store/fulfillment/analytics/${storeId}`);
   }
 }
 

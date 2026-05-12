@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Download,
   RefreshCw,
@@ -26,6 +28,7 @@ import {
 import Image from 'next/image';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
+import ProductForm from '@/components/admin/ProductForm';
 
 interface Product {
   categories: any;
@@ -38,7 +41,7 @@ interface Product {
   manufacturer: string;
   brand: string;
   images: string[];
-  stock: number;
+  stock_quantity: number;
   origin: string;
   source: 'crm' | 'manual';
   createdAt: string;
@@ -79,6 +82,7 @@ interface PendingProduct {
 }
 
 export default function ProductCatalogPage() {
+  const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [manufacturer, setManufacturer] = useState('');
@@ -106,14 +110,14 @@ export default function ProductCatalogPage() {
   // Add to Warehouse Modal State
   const [warehouseModalOpen, setWarehouseModalOpen] = useState(false);
   const [warehouseProduct, setWarehouseProduct] = useState<Product | null>(null);
+  const [addingToWarehouse, setAddingToWarehouse] = useState(false);
   const [warehouseFormData, setWarehouseFormData] = useState({
-    warehouse_stock: 100,
+    warehouse_stock: 0,
     b2c_retail_price: '',
     b2b_wholesale_price: '',
     b2b_moq: 1,
     customer_type: 'BOTH' as 'B2C' | 'B2B' | 'BOTH',
   });
-  const [addingToWarehouse, setAddingToWarehouse] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [showManufacturerModal, setShowManufacturerModal] = useState(false);
   const [newManufacturerName, setNewManufacturerName] = useState('');
@@ -290,7 +294,7 @@ export default function ProductCatalogPage() {
         subcategories: subCategories?.map((c: any) => c.id) || [],
         manufacturer: editingProduct.manufacturer || '',
         brand: editingProduct.brand || '',
-        stock: editingProduct.stock ? editingProduct.stock.toString() : '',
+        stock: editingProduct.stock_quantity ? editingProduct.stock_quantity.toString() : '',
         origin: editingProduct.origin || 'South Korea',
         images: editingProduct.images || [],
       });
@@ -440,12 +444,33 @@ export default function ProductCatalogPage() {
       toast.success(`${warehouseProduct.name} added to warehouse`);
       setWarehouseModalOpen(false);
       setWarehouseProduct(null);
+      // Refetch products to update is_warehouse_product status
+      await fetchProducts();
+      // Redirect to warehouse page to see the added product
+      router.push('/admin/warehouse');
     } catch (error: any) {
       console.error('Failed to add to warehouse:', error);
+      
+      // Handle specific error types
       if (error.message?.includes('already in warehouse')) {
         toast.error('This product is already in the warehouse');
+      } else if (error.message?.includes('Insufficient catalog stock')) {
+        const stockMatch = error.message.match(/Available: (\d+), Requested: (\d+)/);
+        if (stockMatch) {
+          const available = stockMatch[1];
+          const requested = stockMatch[2];
+          toast.error(`Only ${available} units available in catalog. Cannot transfer ${requested} units.`);
+        } else {
+          toast.error('Insufficient stock available in catalog');
+        }
+      } else if (error.message?.includes('Unauthorized')) {
+        toast.error('You are not authorized to add products to warehouse');
+      } else if (error.message?.includes('Network Error')) {
+        toast.error('Network error. Please check your connection and try again.');
+      } else if (error.message?.includes('Missing required field')) {
+        toast.error('Please fill in all required fields');
       } else {
-        toast.error(error.message || 'Failed to add product to warehouse');
+        toast.error(error.message || 'Failed to add product to warehouse. Please try again.');
       }
     } finally {
       setAddingToWarehouse(false);
@@ -521,12 +546,19 @@ export default function ProductCatalogPage() {
           <Plus size={18} />
           Add Product
         </button>
+        <Link
+          href="/admin/products/import"
+          className="flex items-center justify-center gap-2 bg-white text-slate-900 border border-slate-300 px-6 py-2.5 rounded-xl font-medium hover:bg-slate-50 transition-all"
+        >
+          <Upload size={18} />
+          Import
+        </Link>
       </div>
 
-      {/* Add/Edit Product Form Modal */}
+      {/* Add/Edit Product Form Modal - Using Enhanced Component */}
       {(showAddForm || editingProduct) && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-slate-200">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-slate-900">
@@ -543,311 +575,24 @@ export default function ProductCatalogPage() {
                 </button>
               </div>
             </div>
-
-            <form onSubmit={handleAddProduct} className="p-6 grid sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Product Name *
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                placeholder="e.g., COSRX Advanced Snail 96 Essence"
-                required
-              />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Description
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none"
-                rows={3}
-                placeholder="Product description..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Price (USD) <span className="text-slate-400 font-normal">(Optional)</span>
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={formData.price}
-                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                placeholder="29.99"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                MRP / Original Price
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={formData.mrp}
-                onChange={(e) => setFormData({ ...formData, mrp: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                placeholder="39.99"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Main Categories *
-              </label>
-              <div className="flex gap-2 mb-2">
-                <select
-                  value=""
-                  onChange={(e) => {
-                    const selectedCategory = categories.find(c => c.id === e.target.value);
-                    if (selectedCategory) addCategoryTag(selectedCategory);
-                  }}
-                  className="flex-1 px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                >
-                  <option value="">Select main category to add</option>
-                  {categories?.filter(c => !c.parent_id).map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewCategoryParentId('');
-                    setShowCategoryModal(true);
-                  }}
-                  className="px-3 py-2 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition-colors flex items-center gap-1"
-                  title="Add new main category"
-                >
-                  <Plus size={16} />
-                  Add Category
-                </button>
-              </div>
-              {selectedCategoryTags?.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {selectedCategoryTags.map((cat: any) => (
-                    <span
-                      key={cat.id}
-                      className="inline-flex items-center gap-1 px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-sm"
-                    >
-                      {cat.name}
-                      <button
-                        type="button"
-                        onClick={() => removeCategoryTag(cat.id)}
-                        className="hover:text-red-600"
-                      >
-                        <X size={14} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Subcategories (Optional)
-              </label>
-              <div className="flex gap-2 mb-2">
-                <select
-                  value=""
-                  onChange={(e) => {
-                    const selectedSubcategory = (subcategories || []).find(s => s.id === e.target.value);
-                    if (selectedSubcategory) addSubcategoryTag(selectedSubcategory);
-                  }}
-                  className="flex-1 px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                  disabled={!selectedCategoryTags || selectedCategoryTags.length === 0}
-                >
-                  <option value="">Select subcategory to add</option>
-                  {subcategories?.filter(s => selectedCategoryTags?.some((c: any) => c.id === s.parent_id)).map(sub => (
-                      <option key={sub.id} value={sub.id}>
-                        {sub.parent_name} &gt; {sub.name}
-                      </option>
-                    ))}
-                </select>
-                {selectedCategoryTags?.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewCategoryParentId(selectedCategoryTags[0].id);
-                      setShowCategoryModal(true);
-                    }}
-                    className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-1"
-                    title="Add subcategory to selected category"
-                  >
-                    <Plus size={16} />
-                    Add Subcategory
-                  </button>
-                )}
-              </div>
-              {selectedSubcategoryTags?.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {selectedSubcategoryTags?.map((sub: any) => (
-                    <span
-                      key={sub.id}
-                      className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm"
-                    >
-                      {sub.parent_name} &gt; {sub.name}
-                      <button
-                        type="button"
-                        onClick={() => removeSubcategoryTag(sub.id)}
-                        className="hover:text-red-600"
-                      >
-                        <X size={14} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-              {selectedCategoryTags?.length === 0 && (
-                <p className="text-xs text-slate-400 mt-1">Select main categories first to see subcategories</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Manufacturer/Brand
-              </label>
-              <div className="flex gap-2">
-                <select
-                  value={formData.manufacturer}
-                  onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value, brand: e.target.value })}
-                  className="flex-1 px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                >
-                  <option value="">Select manufacturer</option>
-                  {manufacturers?.map(m => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => setShowManufacturerModal(true)}
-                  className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-1"
-                  title="Add new manufacturer"
-                >
-                  <Plus size={16} />
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Stock Quantity
-              </label>
-              <input
-                type="number"
-                value={formData.stock}
-                onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                placeholder="100"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Origin
-              </label>
-              <input
-                type="text"
-                value={formData.origin}
-                onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                placeholder="South Korea"
-              />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Product Images <span className="text-slate-400 font-normal">(Max 5)</span>
-              </label>
-              
-              {/* Image Previews */}
-              {formData.images?.length > 0 && (
-                <div className="flex flex-wrap gap-3 mb-4">
-                  {formData.images.map((img, idx) => (
-                    <div key={idx} className="relative w-24 h-24 rounded-lg overflow-hidden border border-slate-200 group">
-                      <img src={img} alt={`Product ${idx + 1}`} className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => removeImage(idx)}
-                        className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {/* File Upload Input */}
-              {formData.images.length < 5 && (
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple={formData.images.length < 4}
-                    onChange={handleImageUpload}
-                    className="hidden"
-                    id="imageUpload"
-                    disabled={uploadingImages}
-                  />
-                  <label
-                    htmlFor="imageUpload"
-                    className={`flex items-center justify-center gap-2 w-full px-4 py-3 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-slate-400 hover:bg-slate-50 transition-colors ${uploadingImages ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    {uploadingImages ? (
-                      <>
-                        <RefreshCw size={18} className="animate-spin" />
-                        <span className="text-slate-600">Uploading...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload size={18} />
-                        <span className="text-slate-600">Click to upload images</span>
-                        <span className="text-slate-400 text-sm">({formData.images.length}/5)</span>
-                      </>
-                    )}
-                  </label>
-                </div>
-              )}
-              
-              <p className="text-xs text-slate-500 mt-2">
-                Supported: PNG, JPG, JPEG, GIF, WebP. Max 5 images, 16MB each.
-              </p>
-            </div>
-
-            <div className="sm:col-span-2 flex gap-3 pt-4">
-              <button
-                type="button"
-                onClick={() => {
+            
+            {/* Use the enhanced ProductForm component */}
+            <div className="p-6">
+              <ProductForm 
+                existingProduct={editingProduct}
+                onSave={(productData: any) => {
+                  // Handle save logic here
+                  handleAddProduct(productData);
+                }}
+                onCancel={() => {
                   setShowAddForm(false);
                   setEditingProduct(null);
-                  setSelectedCategoryTags([]);
-                  setSelectedSubcategoryTags([]);
                 }}
-                className="px-6 py-2 border-2 border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="flex items-center gap-2 px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium"
-              >
-                <Save size={18} />
-                {editingProduct ? 'Update Product' : 'Save Product'}
-              </button>
+                isModal={true}
+              />
             </div>
-          </form>
+          </div>
         </div>
-      </div>
       )}
 
       {/* Filters */}
@@ -965,13 +710,13 @@ export default function ProductCatalogPage() {
                       )}
                     </div>
                     <span className={`text-xs px-2 py-1 rounded-full ${
-                      product.stock > 10
+                      product.stock_quantity > 10
                         ? 'bg-green-100 text-green-700'
-                        : product.stock > 0
+                        : product.stock_quantity > 0
                         ? 'bg-amber-100 text-amber-700'
                         : 'bg-red-100 text-red-700'
                     }`}>
-                      {product.stock} in stock
+                      {product.stock_quantity} in stock
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mt-3">
@@ -1049,15 +794,26 @@ export default function ProductCatalogPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Initial Stock *
+                    Stock to Move to Warehouse *
                   </label>
                   <input
                     type="number"
                     value={warehouseFormData.warehouse_stock}
-                    onChange={(e) => setWarehouseFormData(prev => ({ ...prev, warehouse_stock: parseInt(e.target.value) || 0 }))}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value) || 0;
+                      const maxStock = warehouseProduct.stock_quantity || 0;
+                      if (value <= maxStock) {
+                        setWarehouseFormData(prev => ({ ...prev, warehouse_stock: value }));
+                      }
+                    }}
                     className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     min="0"
+                    max={warehouseProduct.stock_quantity || 0}
                   />
+                  <p className="text-xs text-slate-400 mt-1">
+                    Available catalog stock: <span className="font-medium text-emerald-600">{warehouseProduct.stock_quantity || 0}</span> units
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">Amount to transfer from catalog to warehouse</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">

@@ -2,7 +2,7 @@
 import { ArrowRight, StarIcon, ShoppingCart, Heart, Share2, Package, Truck, Shield, RotateCcw } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import type { Product } from "@/types"
 import { assets } from "@/assets/assets"
 
@@ -10,50 +10,27 @@ interface ProductDescriptionProps {
     product: Product;
 }
 
-// Sample related products data with real cosmetic images
-const relatedProducts = [
-    {
-        id: "related_1",
-        name: "[COSRX] Advanced Snail 92 All in one Cream",
-        price: 2800,
-        originalPrice: 3500,
-        image: assets.essence,
-        rating: 4.8,
-        brand: "COSRX"
-    },
-    {
-        id: "related_2",
-        name: "[Some By Mi] AHA BHA PHA 30 Days Miracle Toner",
-        price: 2600,
-        originalPrice: 3200,
-        image: assets.anna_keibalo,
-        rating: 4.7,
-        brand: "Some By Mi"
-    },
-    {
-        id: "related_3",
-        name: "[Beauty of Joseon] Glow Serum Propolis + Niacinamide",
-        price: 3000,
-        originalPrice: 3800,
-        image: assets.elena_soroka,
-        rating: 4.9,
-        brand: "Beauty of Joseon"
-    },
-    {
-        id: "related_4",
-        name: "[Innisfree] Green Tea Seed Serum",
-        price: 2500,
-        originalPrice: 3200,
-        image: assets.maria_lupan,
-        rating: 4.6,
-        brand: "Innisfree"
-    }
-]
-
 const ProductDescription = ({ product }: ProductDescriptionProps) => {
 
     const [selectedTab, setSelectedTab] = useState('Description')
     const [isWishlisted, setIsWishlisted] = useState(false)
+    const [relatedProducts, setRelatedProducts] = useState<Product[]>([])
+
+    // Fetch related products from backend
+    useEffect(() => {
+        async function fetchRelatedProducts() {
+            try {
+                const response = await fetch(`/api/products?category=${product.category}&limit=4&exclude=${product.id}`)
+                const data = await response.json()
+                if (data.products) {
+                    setRelatedProducts(data.products)
+                }
+            } catch (error) {
+                console.error('Failed to fetch related products:', error)
+            }
+        }
+        fetchRelatedProducts()
+    }, [product.category, product.id])
 
     const productFeatures = [
         { icon: Package, label: "Authentic Korean Product", desc: "100% genuine from Korea" },
@@ -425,76 +402,82 @@ const ProductDescription = ({ product }: ProductDescriptionProps) => {
             )}
 
             {/* Related Products - BELOW (not beside) */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
-                <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-bold text-slate-900">You May Also Like</h3>
-                    <Link href="/shop" className="flex items-center gap-1 text-pink-600 hover:text-pink-700 font-medium">
-                        View All
-                        <ArrowRight size={18} />
-                    </Link>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {relatedProducts.map((item) => (
-                        <Link 
-                            key={item.id} 
-                            href={`/product/${item.id}`}
-                            className="group bg-slate-50 rounded-xl p-4 hover:bg-pink-50 transition-colors"
-                        >
-                            <div className="aspect-square bg-white rounded-lg mb-3 flex items-center justify-center">
-                                <Image 
-                                    src={item.image} 
-                                    alt={item.name}
-                                    className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform"
-                                    width={200}
-                                    height={200}
-                                />
-                            </div>
-                            <p className="text-xs text-pink-600 font-medium mb-1">{item.brand}</p>
-                            <h4 className="text-sm font-semibold text-slate-900 line-clamp-2 mb-2 group-hover:text-pink-700 transition-colors">{item.name}</h4>
-                            <div className="flex items-center gap-1 mb-2">
-                                {[...Array(5)].map((_, i) => (
-                                    <StarIcon 
-                                        key={i} 
-                                        size={12} 
-                                        className={i < Math.floor(item.rating) ? 'text-yellow-400 fill-yellow-400' : 'text-slate-300'} 
-                                    />
-                                ))}
-                                <span className="text-xs text-slate-500">({item.rating})</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="font-bold text-slate-900">KShs {item.price}</span>
-                                <span className="text-sm text-slate-500 line-through">KShs {item.originalPrice}</span>
-                            </div>
+            {relatedProducts.length > 0 && (
+                <div className="bg-white rounded-2xl border border-slate-200 p-6">
+                    <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-xl font-bold text-slate-900">You May Also Like</h3>
+                        <Link href="/shop" className="flex items-center gap-1 text-pink-600 hover:text-pink-700 font-medium">
+                            View All
+                            <ArrowRight size={18} />
                         </Link>
-                    ))}
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {relatedProducts.slice(0, 4).map((item) => (
+                            <Link 
+                                key={item.id} 
+                                href={`/product/${item.id}`}
+                                className="group bg-slate-50 rounded-xl p-4 hover:bg-pink-50 transition-colors"
+                            >
+                                <div className="aspect-square bg-white rounded-lg mb-3 flex items-center justify-center">
+                                    <Image 
+                                        src={item.images?.[0] || "/placeholder-product.png"} 
+                                        alt={item.name}
+                                        className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform"
+                                        width={200}
+                                        height={200}
+                                    />
+                                </div>
+                                <p className="text-xs text-pink-600 font-medium mb-1">{item.brand}</p>
+                                <h4 className="text-sm font-semibold text-slate-900 line-clamp-2 mb-2 group-hover:text-pink-700 transition-colors">{item.name}</h4>
+                                <div className="flex items-center gap-1 mb-2">
+                                    {[...Array(5)].map((_, i) => (
+                                        <StarIcon 
+                                            key={i} 
+                                            size={12} 
+                                            className={i < Math.floor(item.rating?.length > 0 ? item.rating.reduce((acc, r) => acc + r.rating, 0) / item.rating.length : 0) ? 'text-yellow-400 fill-yellow-400' : 'text-slate-300'} 
+                                        />
+                                    ))}
+                                    <span className="text-xs text-slate-500">({item.rating?.length > 0 ? (item.rating.reduce((acc, r) => acc + r.rating, 0) / item.rating.length).toFixed(1) : '0.0'})</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="font-bold text-slate-900">KShs {item.price}</span>
+                                    {item.mrp && item.mrp > item.price && (
+                                        <span className="text-sm text-slate-500 line-through">KShs {item.mrp}</span>
+                                    )}
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Recently Viewed Section */}
-            <div className="bg-slate-50 rounded-2xl p-6">
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Recently Viewed</h3>
-                <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
-                    {relatedProducts.slice(0, 3).map((item) => (
-                        <Link 
-                            key={`recent-${item.id}`} 
-                            href={`/product/${item.id}`}
-                            className="flex-shrink-0 w-40 bg-white rounded-xl p-3 border border-slate-200 hover:border-pink-300 transition-colors"
-                        >
-                            <div className="aspect-square bg-slate-100 rounded-lg mb-2 flex items-center justify-center">
-                                <Image 
-                                    src={item.image} 
-                                    alt={item.name}
-                                    className="w-full h-full object-contain p-2"
-                                    width={150}
-                                    height={150}
-                                />
-                            </div>
-                            <h4 className="text-xs font-medium text-slate-900 line-clamp-2 mb-1">{item.name}</h4>
-                            <span className="text-sm font-bold text-pink-600">KShs {item.price}</span>
-                        </Link>
-                    ))}
+            {relatedProducts.length > 0 && (
+                <div className="bg-slate-50 rounded-2xl p-6">
+                    <h3 className="text-lg font-bold text-slate-900 mb-4">Recently Viewed</h3>
+                    <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
+                        {relatedProducts.slice(0, 3).map((item) => (
+                            <Link 
+                                key={`recent-${item.id}`} 
+                                href={`/product/${item.id}`}
+                                className="flex-shrink-0 w-40 bg-white rounded-xl p-3 border border-slate-200 hover:border-pink-300 transition-colors"
+                            >
+                                <div className="aspect-square bg-slate-100 rounded-lg mb-2 flex items-center justify-center">
+                                    <Image 
+                                        src={item.images?.[0] || "/placeholder-product.png"} 
+                                        alt={item.name}
+                                        className="w-full h-full object-contain p-2"
+                                        width={150}
+                                        height={150}
+                                    />
+                                </div>
+                                <h4 className="text-xs font-medium text-slate-900 line-clamp-2 mb-1">{item.name}</h4>
+                                <span className="text-sm font-bold text-pink-600">KShs {item.price}</span>
+                            </Link>
+                        ))}
+                    </div>
                 </div>
-            </div>
+            )}
         </div>
     )
 }

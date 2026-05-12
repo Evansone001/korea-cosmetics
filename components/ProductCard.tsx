@@ -1,5 +1,5 @@
 'use client'
-import { StarIcon, ShoppingBagIcon } from 'lucide-react'
+import { StarIcon, ShoppingBagIcon, Store as StoreIcon } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { Product } from '@/types'
@@ -30,10 +30,6 @@ const ProductCard = ({ product }: ProductCardProps) => {
 
     // Calculate savings percentage
     const savingsPercent = product.mrp ? Math.round(((product.mrp - product.price) / product.mrp) * 100) : 0;
-
-    // Wholesale price calculation (if not defined, estimate 60% of retail)
-    const wholesalePrice = product.price * 0.6;
-    const minOrder = 10;
 
     return (
         <div className='group bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-slate-100 flex flex-col h-full'>
@@ -77,6 +73,14 @@ const ProductCard = ({ product }: ProductCardProps) => {
                     </span>
                     <span className='text-xs text-slate-400'>{product.size || 'Standard'}</span>
                 </div>
+
+                {/* Store Information */}
+                {(product as any).store && (
+                    <Link href={`/stores/${(product as any).store.id}`} className='flex items-center gap-1 mb-2 hover:text-pink-600 transition-colors'>
+                        <StoreIcon size={12} className='text-slate-400' />
+                        <span className='text-xs text-slate-600 truncate'>{(product as any).store.name}</span>
+                    </Link>
+                )}
 
                 {/* Product Name */}
                 <Link href={`/product/${product.id}`}>
@@ -133,33 +137,16 @@ const ProductCard = ({ product }: ProductCardProps) => {
                             )}
                         </div>
                     </div>
-
-                    {/* B2B Wholesale Price */}
-                    <div className='flex items-center justify-between bg-gradient-to-r from-pink-50 to-rose-50 rounded-lg p-2 border border-pink-100'>
-                        <div>
-                            <span className='text-xs text-pink-600 font-medium'>B2B Price:</span>
-                            <span className='text-base font-bold text-pink-700 ml-1'>{currency}{Math.round(wholesalePrice).toLocaleString()}</span>
-                        </div>
-                        <span className='text-xs text-pink-600 bg-white px-2 py-1 rounded-full border border-pink-200'>
-                            Min: {minOrder}pcs
-                        </span>
-                    </div>
                 </div>
 
                 {/* Action Buttons */}
                 <div className='flex gap-2 mt-auto'>
                     <Link
-                        href={`/product/${product.id}?type=retail`}
+                        href={`/product/${product.id}`}
                         className='flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white py-2.5 rounded-lg hover:from-pink-600 hover:to-rose-600 transition-all text-xs font-semibold text-center flex items-center justify-center gap-1 shadow-sm hover:shadow-md'
                     >
                         <ShoppingBagIcon size={14} />
-                        Buy Retail
-                    </Link>
-                    <Link
-                        href={`/product/${product.id}?type=b2b`}
-                        className='flex-1 border-2 border-pink-200 text-pink-700 py-2.5 rounded-lg hover:bg-pink-50 hover:border-pink-300 transition-all text-xs font-semibold text-center'
-                    >
-                        B2B Order
+                        Buy
                     </Link>
                 </div>
             </div>

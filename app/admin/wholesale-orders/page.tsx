@@ -106,6 +106,10 @@ interface InvoiceData {
 }
 
 interface WholesaleOrder {
+  uuid: string;
+  rejectionReason: string | null;
+  rejectedAt: any;
+  adminNotes: any;
   id: string;
   storeId: string;
   storeName: string;
@@ -123,6 +127,10 @@ interface WholesaleOrder {
   status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
   paymentStatus: 'pending' | 'paid' | 'refunded';
   shippingAddress: {
+    addressLine1: string;
+    addressLine2: any;
+    state: any;
+    postalCode: any;
     name: string;
     address: string;
     city: string;
@@ -164,10 +172,14 @@ export default function WholesaleOrdersPage() {
   const [showOrderDetails, setShowOrderDetails] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
   const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [processingAction, setProcessingAction] = useState<string | null>(null);
   const [trackingNumber, setTrackingNumber] = useState('');
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectingOrderId, setRejectingOrderId] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [adminNotes, setAdminNotes] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [processingAction, setProcessingAction] = useState<string | null>(null);
   const invoiceRef = useRef<HTMLDivElement>(null);
 
   const handleDownloadInvoice = () => {
@@ -181,7 +193,6 @@ export default function WholesaleOrdersPage() {
   const fetchOrders = async () => {
     try {
       const data = await apiClient.request<any>('/api/admin/wholesale-orders');
-      console.log('API Response:', data);
       setOrders(data.orders || []);
     } catch (error) {
       console.error('Fetch error:', error);
@@ -191,11 +202,28 @@ export default function WholesaleOrdersPage() {
     }
   };
 
-  const handleAction = async (orderId: string, action: string) => {
-    setProcessingAction(`${orderId}-${action}`);
+  // Helper function to generate display order ID
+  const getDisplayOrderId = (orderId: string) => {
+    // If it looks like a human-readable order number (WH-2024-xxxx), use as-is
+    if (orderId.match(/^WH-\d{4}-\d{5}$/)) {
+      return orderId;
+    }
+    // If it's a UUID, show first 8 characters for easier reference
+    return orderId.length > 8 ? orderId.substring(0, 8).toUpperCase() : orderId;
+  };
+
+  const handleAction = async (orderId: string, action: string, uuid?: string) => {
+    if (action === 'reject') {
+      // Show rejection dialog instead of directly rejecting
+      setRejectingOrderId(uuid || orderId);
+      setShowRejectDialog(true);
+      return;
+    }
+
+    setProcessingAction(`${(uuid || orderId)}-${action}`);
     
     try {
-      const body: Record<string, string> = { orderId, action };
+      const body: Record<string, string> = { orderId: uuid || orderId, action };
       if (action === 'ship' && trackingNumber) {
         body.trackingNumber = trackingNumber;
       }
@@ -216,6 +244,46 @@ export default function WholesaleOrdersPage() {
       setTrackingNumber('');
     } catch (error) {
       toast.error('Failed to process action');
+    } finally {
+      setProcessingAction(null);
+    }
+  };
+
+  const handleRejectOrder = async () => {
+    if (!rejectingOrderId || !rejectionReason.trim()) {
+      toast.error('Rejection reason is required');
+      return;
+    }
+
+    setProcessingAction(`${rejectingOrderId}-reject`);
+    
+    try {
+      const body: Record<string, string> = { 
+        orderId: rejectingOrderId, 
+        action: 'reject',
+        rejectionReason: rejectionReason.trim()
+      };
+      
+      if (adminNotes.trim()) {
+        body.adminNotes = adminNotes.trim();
+      }
+
+      const data = await apiClient.request<any>('/api/admin/wholesale-orders', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+
+      toast.success(data.message);
+      
+      // Reset dialog state
+      setShowRejectDialog(false);
+      setRejectingOrderId(null);
+      setRejectionReason('');
+      setAdminNotes('');
+      
+      fetchOrders();
+    } catch (error) {
+      toast.error('Failed to reject order');
     } finally {
       setProcessingAction(null);
     }
@@ -354,7 +422,7 @@ export default function WholesaleOrdersPage() {
                 <tr key={order.id} className="hover:bg-pink-50/30">
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div>
-                      <p className="font-medium text-slate-900">{order.id}</p>
+                      <p className="font-medium text-slate-900">{getDisplayOrderId(order.id)}</p>
                       <p className="text-sm text-slate-500">
                         {new Date(order.createdAt).toLocaleDateString()}
                       </p>
@@ -400,16 +468,16 @@ export default function WholesaleOrdersPage() {
                       {order.status === 'pending' && (
                         <>
                           <button
-                            onClick={() => handleAction(order.id, 'approve')}
-                            disabled={processingAction === `${order.id}-approve`}
+                            onClick={() => handleAction(order.id, 'approve', order.uuid)}
+                            disabled={processingAction === `${order.uuid || order.id}-approve`}
                             className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-50"
                           >
                             <CheckCircle2 size={14} />
                             Approve
                           </button>
                           <button
-                            onClick={() => handleAction(order.id, 'reject')}
-                            disabled={processingAction === `${order.id}-reject`}
+                            onClick={() => handleAction(order.id, 'reject', order.uuid)}
+                            disabled={processingAction === `${order.uuid || order.id}-reject`}
                             className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50"
                           >
                             <XCircle size={14} />
@@ -514,8 +582,22 @@ export default function WholesaleOrdersPage() {
                   </h3>
                   <div className="space-y-2 text-sm">
                     <p className="font-medium">{selectedOrder.shippingAddress.name}</p>
-                    <p>{selectedOrder.shippingAddress.address}</p>
-                    <p>{selectedOrder.shippingAddress.city}, {selectedOrder.shippingAddress.country}</p>
+                    <p>{selectedOrder.shippingAddress.addressLine1 || selectedOrder.shippingAddress.address || 'No address provided'}</p>
+                    {selectedOrder.shippingAddress.addressLine2 && (
+                      <p>{selectedOrder.shippingAddress.addressLine2}</p>
+                    )}
+                    <p>
+                      {selectedOrder.shippingAddress.city && (
+                        <>{selectedOrder.shippingAddress.city}</>
+                      )}
+                      {selectedOrder.shippingAddress.state && (
+                        <>, {selectedOrder.shippingAddress.state}</>
+                      )}
+                      {selectedOrder.shippingAddress.postalCode && (
+                        <> {selectedOrder.shippingAddress.postalCode}</>
+                      )}
+                    </p>
+                    <p>{selectedOrder.shippingAddress.country}</p>
                     <p><span className="text-slate-500">Phone:</span> {selectedOrder.shippingAddress.phone}</p>
                   </div>
                 </div>
@@ -563,6 +645,26 @@ export default function WholesaleOrdersPage() {
                     <p><span className="text-slate-500">Updated:</span> {new Date(selectedOrder.updatedAt).toLocaleString()}</p>
                   </div>
                 </div>
+                
+                {/* Rejection Information - Only show if order is rejected */}
+                {selectedOrder.status === 'cancelled' && selectedOrder.rejectionReason && (
+                  <div className="bg-red-50 rounded-lg p-4">
+                    <h3 className="font-semibold text-red-900 mb-3 flex items-center gap-2">
+                      <XCircle size={16} />
+                      Rejection Information
+                    </h3>
+                    <div className="space-y-2 text-sm">
+                      <p><span className="text-red-700">Reason:</span> {selectedOrder.rejectionReason}</p>
+                      {selectedOrder.rejectedAt && (
+                        <p><span className="text-red-700">Rejected:</span> {new Date(selectedOrder.rejectedAt).toLocaleString()}</p>
+                      )}
+                      {selectedOrder.adminNotes && (
+                        <p><span className="text-red-700">Admin Notes:</span> {selectedOrder.adminNotes}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
                 <div className="bg-slate-50 rounded-lg p-4">
                   <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
                     <DollarSign size={16} />
@@ -750,6 +852,83 @@ export default function WholesaleOrdersPage() {
                   )}
                 </PDFDownloadLink>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rejection Dialog */}
+      {showRejectDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full mx-4">
+            <div className="p-6 border-b border-slate-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-slate-900">Reject Order</h2>
+              <button
+                onClick={() => setShowRejectDialog(false)}
+                className="p-2 hover:bg-slate-100 rounded-lg"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+            <div className="p-6">
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Rejection Reason <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    rows={3}
+                    placeholder="Please explain why this order is being rejected..."
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Admin Notes (Optional)
+                  </label>
+                  <textarea
+                    value={adminNotes}
+                    onChange={(e) => setAdminNotes(e.target.value)}
+                    rows={2}
+                    placeholder="Additional notes for internal records..."
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowRejectDialog(false);
+                    setRejectingOrderId(null);
+                    setRejectionReason('');
+                    setAdminNotes('');
+                  }}
+                  className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50"
+                  disabled={processingAction === `${rejectingOrderId}-reject`}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRejectOrder}
+                  disabled={!rejectionReason.trim() || processingAction === `${rejectingOrderId}-reject`}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {processingAction === `${rejectingOrderId}-reject` ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Rejecting...
+                    </div>
+                  ) : (
+                    'Reject Order'
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

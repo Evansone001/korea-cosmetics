@@ -1,11 +1,13 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Search, CheckCircle, XCircle, Clock, Package, AlertTriangle, Eye } from 'lucide-react'
+import { Search, CheckCircle, XCircle, Clock, Package, AlertTriangle, Eye, Plus } from 'lucide-react'
 import { apiClient, Product } from '@/lib/api-client'
 import toast from 'react-hot-toast'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 
 export default function AdminProductsPage() {
+    const router = useRouter()
     const [searchQuery, setSearchQuery] = useState('')
     const [products, setProducts] = useState<Product[]>([])
     const [loading, setLoading] = useState(true)
@@ -110,11 +112,20 @@ export default function AdminProductsPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div>
-                <h1 className="text-2xl font-bold text-slate-900">Product Approvals</h1>
-                <p className="text-slate-500 mt-1">
-                    Review and approve seller products before they go live
-                </p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900">Product Approvals</h1>
+                    <p className="text-slate-500 mt-1">
+                        Review and approve seller products before they go live
+                    </p>
+                </div>
+                <button
+                    onClick={() => router.push('/admin/products/create')}
+                    className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2.5 rounded-xl font-medium hover:bg-slate-800 transition-all"
+                >
+                    <Plus size={18} />
+                    Create Product
+                </button>
             </div>
 
             {/* Stats */}

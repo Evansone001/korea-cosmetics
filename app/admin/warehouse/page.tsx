@@ -22,6 +22,12 @@ interface WarehouseProduct {
   b2c_retail_price: number | null
   b2b_wholesale_price: number | null
   b2b_moq: number
+  suggested_retail_price?: number | null
+  minimum_selling_price?: number | null
+  logistics_mode?: string
+  tax_rate?: number
+  requires_license?: boolean
+  storage_requirements?: string
   status: string
   sku?: string
 }
@@ -34,7 +40,7 @@ export default function AdminWarehousePage() {
   const [customerTypeFilter, setCustomerTypeFilter] = useState<string>('ALL')
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<WarehouseProduct | null>(null)
-  const [formData, setFormData] = useState({name: '', description: '', category: '', brand: '', customer_type: 'BOTH' as 'B2C' | 'B2B' | 'BOTH', warehouse_stock: 0, b2c_retail_price: '', b2b_wholesale_price: '', b2b_moq: 1, sku: ''})
+  const [formData, setFormData] = useState({name: '', description: '', category: '', brand: '', customer_type: 'BOTH' as 'B2C' | 'B2B' | 'BOTH', warehouse_stock: 0, b2c_retail_price: '', b2b_wholesale_price: '', b2b_moq: 1, suggested_retail_price: '', logistics_mode: 'WAREHOUSE_TO_STORE' as 'WAREHOUSE_TO_STORE' | 'DIRECT_SHIP', tax_rate: '0', requires_license: false, storage_requirements: '', sku: ''})
 
   const fetchProducts = async () => {
     try {
@@ -60,7 +66,14 @@ export default function AdminWarehousePage() {
   const handleUpdate = async () => {
     if (!selectedProduct) return
     try {
-      const data = {...formData, b2c_retail_price: formData.b2c_retail_price ? parseFloat(formData.b2c_retail_price) : null, b2b_wholesale_price: formData.b2b_wholesale_price ? parseFloat(formData.b2b_wholesale_price) : null}
+      const data = {
+        ...formData,
+        b2c_retail_price: formData.b2c_retail_price ? parseFloat(formData.b2c_retail_price) : null,
+        b2b_wholesale_price: formData.b2b_wholesale_price ? parseFloat(formData.b2b_wholesale_price) : null,
+        suggested_retail_price: formData.suggested_retail_price ? parseFloat(formData.suggested_retail_price) : null,
+        minimum_selling_price: formData.suggested_retail_price ? parseFloat(formData.suggested_retail_price) : null,
+        tax_rate: formData.tax_rate ? parseFloat(formData.tax_rate) : 0
+      }
       await apiClient.updateWarehouseProduct(selectedProduct.id, data)
       toast({ title: "Success", description: "Product updated" })
       setIsEditDialogOpen(false)
@@ -83,7 +96,23 @@ export default function AdminWarehousePage() {
 
   const openEdit = (product: WarehouseProduct) => {
     setSelectedProduct(product)
-    setFormData({name: product.name, description: product.description, category: product.category, brand: product.brand || '', customer_type: product.customer_type, warehouse_stock: product.warehouse_stock, b2c_retail_price: product.b2c_retail_price?.toString() || '', b2b_wholesale_price: product.b2b_wholesale_price?.toString() || '', b2b_moq: product.b2b_moq, sku: product.sku || ''})
+    setFormData({
+      name: product.name,
+      description: product.description,
+      category: product.category,
+      brand: product.brand || '',
+      customer_type: product.customer_type,
+      warehouse_stock: product.warehouse_stock,
+      b2c_retail_price: product.b2c_retail_price?.toString() || '',
+      b2b_wholesale_price: product.b2b_wholesale_price?.toString() || '',
+      b2b_moq: product.b2b_moq,
+      suggested_retail_price: product.suggested_retail_price?.toString() || '',
+      logistics_mode: (product.logistics_mode as 'WAREHOUSE_TO_STORE' | 'DIRECT_SHIP') || 'WAREHOUSE_TO_STORE',
+      tax_rate: product.tax_rate?.toString() || '0',
+      requires_license: product.requires_license || false,
+      storage_requirements: product.storage_requirements || '',
+      sku: product.sku || ''
+    })
     setIsEditDialogOpen(true)
   }
 
@@ -390,6 +419,75 @@ export default function AdminWarehousePage() {
                   onChange={(e) => setFormData({...formData, b2b_moq: parseInt(e.target.value)})}
                   className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
                   min="1"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Suggested Retail Price ($) *
+                </label>
+                <input
+                  type="number"
+                  value={formData.suggested_retail_price}
+                  onChange={(e) => setFormData({...formData, suggested_retail_price: e.target.value})}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  step="0.01"
+                  required
+                />
+                <p className="text-xs text-slate-400 mt-1">Minimum price stores can sell at (enforces brand integrity)</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Logistics Mode
+                </label>
+                <Select value={formData.logistics_mode} onValueChange={(v: 'WAREHOUSE_TO_STORE' | 'DIRECT_SHIP') => setFormData({...formData, logistics_mode: v})}>
+                  <SelectTrigger className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="WAREHOUSE_TO_STORE">Warehouse to Store</SelectItem>
+                    <SelectItem value="DIRECT_SHIP">Direct Ship from Warehouse</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Tax Rate (%)
+                </label>
+                <input
+                  type="number"
+                  value={formData.tax_rate}
+                  onChange={(e) => setFormData({...formData, tax_rate: e.target.value})}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="requires_license"
+                  checked={formData.requires_license}
+                  onChange={(e) => setFormData({...formData, requires_license: e.target.checked})}
+                  className="w-4 h-4 border border-slate-300 rounded focus:ring-2 focus:ring-slate-900"
+                />
+                <label htmlFor="requires_license" className="block text-sm font-medium text-slate-700">
+                  Requires Special License
+                </label>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Storage Requirements
+                </label>
+                <textarea
+                  value={formData.storage_requirements}
+                  onChange={(e) => setFormData({...formData, storage_requirements: e.target.value})}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  rows={2}
+                  placeholder="e.g., Store at room temperature, keep away from direct sunlight"
                 />
               </div>
 

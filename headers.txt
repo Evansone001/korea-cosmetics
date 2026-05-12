@@ -1,0 +1,14 @@
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.8 Python/3.12.3
+Date: Sun, 10 May 2026 07:07:54 GMT
+Content-Type: application/json
+Content-Length: 2720
+Access-Control-Allow-Origin: http://localhost:3000
+Access-Control-Allow-Credentials: true
+X-Frame-Options: SAMEORIGIN
+X-XSS-Protection: 1; mode=block
+X-Content-Type-Options: nosniff
+Content-Security-Policy: default-src 'self'; object-src 'none'
+Referrer-Policy: strict-origin-when-cross-origin
+Connection: close
+

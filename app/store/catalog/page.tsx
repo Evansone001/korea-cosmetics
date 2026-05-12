@@ -1,37 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
-  Package, 
-  Plus, 
-  Search, 
+import {
+  Package,
+  Plus,
+  Search,
   Minus,
   CheckCircle2,
+  XCircle,
   ShoppingBag,
   Building2,
   ShoppingCart,
-  Store
+  Store,
+  Star
 } from 'lucide-react';
 import Image from 'next/image';
 import toast from 'react-hot-toast';
-import { apiClient } from '@/lib/api-client';
-
-interface CatalogProduct {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  brand?: string;
-  customer_type?: 'B2C' | 'B2B' | 'BOTH';
-  warehouse_stock?: number;
-  store_price?: number;
-  store_moq?: number;
-  b2b_moq?: number;
-  images?: string[];
-  manufacturer?: string;
-  origin?: string;
-  alreadyAdded?: boolean;
-}
+import { apiClient, StoreProduct } from '@/lib/api-client';
 
 // Helper to get full image URL
 const getImageUrl = (path: string | undefined): string => {
@@ -43,7 +28,7 @@ const getImageUrl = (path: string | undefined): string => {
 };
 
 export default function StoreCatalogPage() {
-  const [products, setProducts] = useState<CatalogProduct[]>([]);
+  const [products, setProducts] = useState<StoreProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -51,10 +36,13 @@ export default function StoreCatalogPage() {
   const [addingProduct, setAddingProduct] = useState<string | null>(null);
   
   // Purchase dialog state
-  const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<StoreProduct | null>(null);
   const [isPurchaseDialogOpen, setIsPurchaseDialogOpen] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const [shippingMethod, setShippingMethod] = useState<'warehouse_to_store' | 'direct_ship'>('warehouse_to_store');
+  const [notes, setNotes] = useState('');
+  const [complianceResults, setComplianceResults] = useState<any>(null);
 
   useEffect(() => {
     fetchAvailableProducts();
@@ -62,13 +50,14 @@ export default function StoreCatalogPage() {
 
   const fetchAvailableProducts = async () => {
     try {
-      // Fetch warehouse catalog products (filtered by store type)
-      const response = await apiClient.getStoreCatalog({
+      // Fetch store's product catalog using new API
+      const response = await apiClient.getStoreProductCatalog({
+        status: 'active',
         category: selectedCategory || undefined,
-        search: searchQuery || undefined
+        limit: 50
       });
       setProducts(response?.products || []);
-      setStoreType(response?.store_customer_type || 'B2C');
+      setStoreType(response?.store?.customerType || 'B2C');
     } catch (error) {
       console.error('Failed to fetch catalog:', error);
       toast.error('Failed to load catalog');
@@ -77,7 +66,7 @@ export default function StoreCatalogPage() {
     }
   };
 
-  const openPurchaseDialog = (product: CatalogProduct) => {
+  const openPurchaseDialog = (product: StoreProduct) => {
     setSelectedProduct(product);
     setQuantity(storeType === 'B2B' ? (product.store_moq || 1) : 1);
     setIsPurchaseDialogOpen(true);
@@ -85,25 +74,35 @@ export default function StoreCatalogPage() {
 
   const handlePurchase = async () => {
     if (!selectedProduct) return;
-    
-    if (quantity < 1) {
-      toast.error('Quantity must be at least 1');
-      return;
-    }
-    
-    if (storeType === 'B2B' && quantity < (selectedProduct.store_moq || 1)) {
+
+    if (quantity < (selectedProduct.store_moq || 1)) {
       toast.error(`Minimum order quantity is ${selectedProduct.store_moq}`);
       return;
     }
-    
+
     setAddingProduct(selectedProduct.id);
     setIsPurchasing(true);
-    
+
     try {
-      await apiClient.purchaseFromWarehouse(selectedProduct.id, quantity);
-      toast.success(`Purchased ${quantity} units of ${selectedProduct.name}`);
-      setIsPurchaseDialogOpen(false);
-      fetchAvailableProducts();
+      const response = await apiClient.purchaseFromWarehouse({
+        product_id: selectedProduct.id,
+        quantity,
+        shipping_method: shippingMethod,
+        notes
+      }) as any;
+      
+      setComplianceResults({
+        passed: response.compliance_checks_passed,
+        checks: response.compliance_checks
+      });
+
+      if (response.compliance_checks_passed) {
+        toast.success(`Purchase order created successfully. Waiting for admin approval.`);
+        setIsPurchaseDialogOpen(false);
+        fetchAvailableProducts();
+      } else {
+        toast.error('Compliance checks failed. Please review and try again.');
+      }
     } catch (error: any) {
       console.error('Failed to purchase:', error);
       toast.error(error.message || 'Failed to purchase product');
@@ -123,7 +122,7 @@ export default function StoreCatalogPage() {
   const manufacturers = ['COSRX', 'Innisfree', 'Some By Mi', 'Beauty of Joseon', 'Laneige'];
 
   const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const matchesSearch = product.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          product.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = !selectedCategory || product.category === selectedCategory;
     
@@ -179,7 +178,7 @@ export default function StoreCatalogPage() {
             </div>
             <div>
               <p className="text-2xl font-bold text-slate-900">
-                {products.filter(p => (p.warehouse_stock ?? 0) > 0).length}
+                {products.filter(p => p.stockQuantity > 0).length}
               </p>
               <p className="text-sm text-slate-500">In Stock</p>
             </div>
@@ -233,7 +232,7 @@ export default function StoreCatalogPage() {
               {product.images && product.images[0] ? (
                 <Image
                   src={getImageUrl(product.images[0])}
-                  alt={product.name}
+                  alt={product.productName}
                   fill
                   className="object-cover"
                 />
@@ -243,7 +242,7 @@ export default function StoreCatalogPage() {
                 </div>
               )}
               <div className="absolute top-3 right-3 bg-white/90 backdrop-blur px-2 py-1 rounded text-xs font-medium">
-                {product.origin || product.brand}
+                {product.brand}
               </div>
             </div>
             <div className="p-4">
@@ -251,7 +250,7 @@ export default function StoreCatalogPage() {
                 {product.brand}
               </p>
               <h3 className="font-medium text-slate-900 mt-1 line-clamp-2">
-                {product.name}
+                {product.productName}
               </h3>
               <p className="text-sm text-slate-500 mt-1 line-clamp-2">
                 {product.description}
@@ -261,25 +260,36 @@ export default function StoreCatalogPage() {
                   {product.category}
                 </span>
                 <span className={`text-xs px-2 py-1 rounded ${
-                  (product.warehouse_stock ?? 0) > 10
+                  product.stockQuantity > 10
                     ? 'bg-green-100 text-green-700'
-                    : (product.warehouse_stock ?? 0) > 0
+                    : product.stockQuantity > 0
                     ? 'bg-amber-100 text-amber-700'
                     : 'bg-red-100 text-red-700'
                 }`}>
-                  {product.warehouse_stock ?? 0} available
+                  {product.stockQuantity} in stock
                 </span>
+                {product.featured && (
+                  <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                    <Star className="h-3 w-3 inline mr-1" />
+                    Featured
+                  </span>
+                )}
               </div>
               <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
                 <div>
-                  <span className="font-bold text-slate-900">${product.store_price ?? 0}</span>
+                  <span className="font-bold text-slate-900">${product.price.toFixed(2)}</span>
+                  {product.comparePrice && (
+                    <span className="text-xs text-slate-500 line-through ml-1">
+                      ${product.comparePrice.toFixed(2)}
+                    </span>
+                  )}
                   {storeType === 'B2B' && (
-                    <span className="text-xs text-slate-500 ml-1">(MOQ: {product.store_moq || 1})</span>
+                    <span className="text-xs text-slate-500 ml-1">(MOQ: 1)</span>
                   )}
                 </div>
                 <button
                   onClick={() => openPurchaseDialog(product)}
-                  disabled={addingProduct === product.id || (product.warehouse_stock ?? 0) === 0}
+                  disabled={addingProduct === product.id || product.stockQuantity === 0}
                   className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg font-medium hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {addingProduct === product.id ? (
@@ -359,13 +369,54 @@ export default function StoreCatalogPage() {
               )}
               
               <p className="text-sm text-slate-500">Available: {selectedProduct.warehouse_stock ?? 0} units</p>
-              
-              <div className="mt-4 pt-4 border-t">
+
+              <div className="mt-4 pt-4 border-t space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Shipping Method</label>
+                  <select
+                    value={shippingMethod}
+                    onChange={(e) => setShippingMethod(e.target.value as 'warehouse_to_store' | 'direct_ship')}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value="warehouse_to_store">Warehouse to Store</option>
+                    <option value="direct_ship">Direct Ship from Warehouse</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Notes (optional)</label>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    rows={2}
+                    placeholder="Add any special instructions..."
+                  />
+                </div>
+
                 <div className="flex justify-between text-lg font-semibold">
                   <span>Total:</span>
                   <span>${((selectedProduct.store_price ?? 0) * quantity).toFixed(2)}</span>
                 </div>
               </div>
+
+              {complianceResults && (
+                <div className={`mt-4 p-3 rounded-lg ${complianceResults.passed ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                  <h4 className="font-medium mb-2">Compliance Checks</h4>
+                  <div className="space-y-1">
+                    {complianceResults.checks.map((check: any, idx: number) => (
+                      <div key={idx} className="flex items-center gap-2 text-sm">
+                        {check.status === 'passed' ? (
+                          <CheckCircle2 size={14} className="text-green-600" />
+                        ) : (
+                          <XCircle size={14} className="text-red-600" />
+                        )}
+                        <span className="capitalize">{check.check_type.replace(/_/g, ' ')}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             
             <div className="flex gap-3">
@@ -377,7 +428,7 @@ export default function StoreCatalogPage() {
               </button>
               <button
                 onClick={handlePurchase}
-                disabled={isPurchasing || quantity > (selectedProduct.warehouse_stock ?? 0)}
+                disabled={isPurchasing || quantity > selectedProduct.stockQuantity}
                 className="flex-1 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50"
               >
                 {isPurchasing ? 'Processing...' : 'Confirm Purchase'}

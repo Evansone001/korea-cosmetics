@@ -37,53 +37,73 @@ export default function Cart() {
         }
 
         try {
-            // Fetch product details for each cart item
-            const productPromises = productIds.map(id => 
-                apiClient.getProduct(id).catch((err) => {
-                    console.error(`[Cart] Failed to fetch product ${id}:`, err);
-                    return null;
-                })
-            );
-            const products = await Promise.all(productPromises);
-            
-            console.log('[Cart] Fetched products:', products);
-            
-            const newCartArray: CartItem[] = [];
-            let total = 0;
-            
-            productIds.forEach((id, index) => {
-                const product = products[index] as Product | null;
-                const quantity = cartItems[id];
-                
-                console.log(`[Cart] Processing item ${id}:`, { product, quantity });
-                
-                if (product && quantity && product.price) {
-                    newCartArray.push({
-                        product: product,
-                        quantity: quantity,
-                    });
-                    total += product.price * quantity;
-                } else {
-                    console.log(`[Cart] Skipped item ${id}:`, {
-                        hasProduct: !!product,
-                        hasQuantity: !!quantity,
-                        hasPrice: !!(product && product.price),
-                        product,
-                        quantity
-                    });
-                }
+            // Fetch product details in batch
+            const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000';
+            const response = await fetch(`${API_BASE_URL}/api/products/batch`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify({ product_ids: productIds }),
             });
             
-            console.log('[Cart] cartArray:', newCartArray);
-            console.log('[Cart] total:', total);
+            const data = await response.json();
             
-            setCartArray(newCartArray);
-            setTotalPrice(total);
+            if (!response.ok) {
+                console.error('[Cart] Failed to fetch batch products:', data.error);
+                // Fallback to individual fetches
+                const productPromises = productIds.map(id => 
+                    apiClient.getProduct(id).catch((err) => {
+                        console.error(`[Cart] Failed to fetch product ${id}:`, err);
+                        return null;
+                    })
+                );
+                const products = await Promise.all(productPromises);
+                processCartProducts(products, productIds);
+            } else {
+                console.log('[Cart] Fetched batch products:', data.products);
+                processCartProducts(data.products, productIds);
+            }
         } catch (error) {
             console.error('Failed to fetch cart products:', error);
-        } finally {
             setLoading(false);
         }
+    }
+
+    const processCartProducts = (products: any[], productIds: string[]) => {
+        const newCartArray: CartItem[] = [];
+        let total = 0;
+        
+        productIds.forEach((id, index) => {
+            const product = products[index] as Product | null;
+            const quantity = cartItems[id];
+            
+            console.log(`[Cart] Processing item ${id}:`, { product, quantity });
+            
+            if (product && quantity && product.price) {
+                newCartArray.push({
+                    product: product,
+                    quantity: quantity,
+                });
+                total += product.price * quantity;
+            } else {
+                console.log(`[Cart] Skipped item ${id}:`, {
+                    hasProduct: !!product,
+                    hasQuantity: !!quantity,
+                    hasPrice: !!(product && product.price),
+                    product,
+                    quantity
+                });
+            }
+        });
+        
+        console.log('[Cart] cartArray:', newCartArray);
+        console.log('[Cart] total:', total);
+        
+        setCartArray(newCartArray);
+        setTotalPrice(total);
+        setLoading(false);
     }
 
     const handleDeleteItemFromCart = (productId: string) => {

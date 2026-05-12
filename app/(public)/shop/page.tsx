@@ -21,9 +21,26 @@ function ShopContent() {
     const [selectedCategory, setSelectedCategory] = useState("All")
     const [sortBy, setSortBy] = useState("featured")
     const [viewMode, setViewMode] = useState<"grid" | "compact">("grid")
+    const [selectedStore, setSelectedStore] = useState("")
+    const [stores, setStores] = useState<any[]>([])
     const [products, setProducts] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+
+    // Fetch stores for filter
+    useEffect(() => {
+        const fetchStores = async () => {
+            try {
+                const backendUrl = process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000'
+                const response = await fetch(`${backendUrl}/api/stores?limit=50`)
+                const data = await response.json()
+                setStores(data.stores || [])
+            } catch (err) {
+                console.error('Failed to fetch stores:', err)
+            }
+        }
+        fetchStores()
+    }, [])
 
     // Fetch products from backend
     useEffect(() => {
@@ -42,6 +59,10 @@ function ShopContent() {
 
                 if (selectedCategory !== "All") {
                     params.category = selectedCategory
+                }
+
+                if (selectedStore) {
+                    params.store_id = selectedStore
                 }
 
                 // Map sort values to API parameters
@@ -87,7 +108,7 @@ function ShopContent() {
         }
 
         fetchProducts()
-    }, [search, selectedCategory, sortBy])
+    }, [search, selectedCategory, sortBy, selectedStore])
 
     const productCount = products.length;
 
@@ -165,7 +186,7 @@ function ShopContent() {
             {/* Filters Bar */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white rounded-xl p-4 shadow-sm border border-slate-100">
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-wrap items-center gap-4">
                         <div className="flex items-center gap-2 text-slate-600">
                             <FilterIcon size={18} />
                             <span className="text-sm font-medium">Sort by:</span>
@@ -180,6 +201,19 @@ function ShopContent() {
                             <option value="price-low">Price: Low to High</option>
                             <option value="price-high">Price: High to Low</option>
                             <option value="rating">Best Rated</option>
+                        </select>
+                        <div className="flex items-center gap-2 text-slate-600">
+                            <span className="text-sm font-medium">Store:</span>
+                        </div>
+                        <select 
+                            value={selectedStore}
+                            onChange={(e) => setSelectedStore(e.target.value)}
+                            className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pink-500 bg-white"
+                        >
+                            <option value="">All Stores</option>
+                            {stores.map((store) => (
+                                <option key={store.id} value={store.id}>{store.name}</option>
+                            ))}
                         </select>
                     </div>
 

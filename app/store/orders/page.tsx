@@ -92,6 +92,16 @@ export default function StoreOrdersPage() {
     fetchStats();
   }, [statusFilter, activeTab]);
 
+  // Add real-time polling for admin updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchOrders();
+      fetchStats();
+    }, 30000); // Poll every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [statusFilter, activeTab]);
+
   const fetchOrders = async () => {
     try {
       setLoading(true);
@@ -179,8 +189,9 @@ export default function StoreOrdersPage() {
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       pending: 'bg-amber-100 text-amber-700',
-      processing: 'bg-blue-100 text-blue-700',
-      shipped: 'bg-purple-100 text-purple-700',
+      confirmed: 'bg-blue-100 text-blue-700',
+      processing: 'bg-purple-100 text-purple-700',
+      shipped: 'bg-indigo-100 text-indigo-700',
       delivered: 'bg-green-100 text-green-700',
       cancelled: 'bg-red-100 text-red-700'
     };
@@ -190,6 +201,7 @@ export default function StoreOrdersPage() {
   const getStatusIcon = (status: string) => {
     const icons: Record<string, React.ReactNode> = {
       pending: <Clock size={14} />,
+      confirmed: <CheckCircle2 size={14} />,
       processing: <Package size={14} />,
       shipped: <Truck size={14} />,
       delivered: <CheckCircle2 size={14} />,

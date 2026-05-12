@@ -76,44 +76,49 @@ function LoginContent({ dispatch, redirect }: {
             if (response.ok && data.access_token) {
                 console.log('[Login] Login successful, dispatching setUser with role:', data.user?.role)
 
+                // Store token in localStorage for API calls
+                localStorage.setItem('auth-token', data.access_token)
+                localStorage.setItem('refresh-token', data.refresh_token)
+
+                // Set cookies for middleware compatibility
+                document.cookie = `auth-token=${data.access_token}; path=/; max-age=${30*24*60*60}; SameSite=Lax`
+                document.cookie = `refresh-token=${data.refresh_token}; path=/; max-age=${30*24*60*60}; SameSite=Lax`
+
                 dispatch(setUser(data.user))
                 dispatch(setAuthenticated(true))
+
+                // Protected routes that should not be overridden by role-based redirects
+                const protectedRoutes = ['/checkout', '/cart', '/orders', '/profile']
+                const isProtectedRoute = protectedRoutes.some(route => redirect.startsWith(route))
 
                 // Role-based redirect logic
                 let finalRedirect = redirect
 
-                // Apply role-based redirect based on user's role
-                if (data.user?.role === 'admin' || data.user?.role === 'super_admin') {
-                    // Admin and super_admin users should go to admin dashboard unless redirecting to a non-dashboard page
-                    if (redirect === '/' || redirect === '/store') {
-                        finalRedirect = '/admin'
-                    }
-                } else if (data.user?.role === 'seller') {
-                    // Seller users should go to seller dashboard unless redirecting to a non-dashboard page
-                    if (redirect === '/' || redirect === '/admin') {
-                        finalRedirect = '/store'
-                    }
-                } else if (data.user?.role === 'customer') {
-                    // Customer users should go to orders if no specific redirect
-                    if (redirect === '/') {
-                        finalRedirect = '/orders'
+                // Only apply role-based redirects if not redirecting to a protected route
+                if (!isProtectedRoute) {
+                    if (data.user?.role === 'admin' || data.user?.role === 'super_admin') {
+                        // Admin and super_admin users should go to admin dashboard unless redirecting to a non-dashboard page
+                        if (redirect === '/' || redirect === '/store') {
+                            finalRedirect = '/admin'
+                        }
+                    } else if (data.user?.role === 'seller') {
+                        // Seller users should go to seller dashboard unless redirecting to a non-dashboard page
+                        if (redirect === '/' || redirect === '/admin') {
+                            finalRedirect = '/store'
+                        }
+                    } else if (data.user?.role === 'customer') {
+                        // Customer users should go to orders if no specific redirect
+                        if (redirect === '/') {
+                            finalRedirect = '/orders'
+                        }
                     }
                 }
 
                 console.log('[Login] Redux dispatch complete, redirecting to:', finalRedirect)
 
-                // Add small delay to allow browser to update cookie store before redirect
-                setTimeout(() => {
-                    console.log('[Login] Executing router.push to:', finalRedirect)
-                    router.push(finalRedirect)
-                    // Reset loading state after redirect attempt in case it fails
-                    setTimeout(() => {
-                        if (isLoading) {
-                            console.log('[Login] Redirect may have failed, resetting loading state')
-                            setIsLoading(false)
-                        }
-                    }, 2000)
-                }, 100)
+                // Immediate redirect - no artificial delay needed
+                console.log('[Login] Executing router.push to:', finalRedirect)
+                router.push(finalRedirect)
             } else {
                 console.log('[Login] Login failed:', data.error)
                 setError(data.error || 'Invalid email or password')

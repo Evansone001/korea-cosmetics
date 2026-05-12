@@ -14,13 +14,27 @@ export default function CheckoutPage() {
     const router = useRouter();
     const dispatch = useAppDispatch();
     const { cartItems } = useAppSelector(state => state.cart);
-    const { user } = useAppSelector(state => state?.auth || { user: null, isAuthenticated: false, isLoading: true });
+    const { user, isAuthenticated, isLoading: authLoading } = useAppSelector(state => state?.auth || { user: null, isAuthenticated: false, isLoading: true });
 
     const [step, setStep] = useState<'shipping' | 'payment' | 'review'>('shipping');
     const [isProcessing, setIsProcessing] = useState(false);
     const [cartArray, setCartArray] = useState<CartItem[]>([]);
     const [totalPrice, setTotalPrice] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
+    const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+    // Check authentication and redirect if not logged in
+    useEffect(() => {
+        if (!authLoading) {
+            if (!isAuthenticated) {
+                console.log('[Checkout] User not authenticated, redirecting to login');
+                router.push('/login?redirect=/checkout');
+            } else {
+                console.log('[Checkout] User authenticated, proceeding to checkout');
+                setIsCheckingAuth(false);
+            }
+        }
+    }, [isAuthenticated, authLoading, router]);
 
     // Shipping form state
     const [shippingAddress, setShippingAddress] = useState<Partial<Address>>({
@@ -33,6 +47,13 @@ export default function CheckoutPage() {
         country: 'Kenya',
         phone: ''
     });
+
+    // Update shipping address when user data is loaded
+    useEffect(() => {
+        if (user?.email && !shippingAddress.email) {
+            setShippingAddress(prev => ({ ...prev, email: user.email }));
+        }
+    }, [user?.email]);
 
     const [paymentMethod, setPaymentMethod] = useState<'card' | 'mpesa' | 'cod'>('mpesa');
     const [promoCode, setPromoCode] = useState('');
@@ -76,6 +97,18 @@ export default function CheckoutPage() {
         }
     }, [cartArray, cartItems, router, isLoading]);
 
+    // Show loading state while checking authentication
+    if (isCheckingAuth) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-12 h-12 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin mx-auto mb-4" />
+                    <p className="text-slate-600">Checking authentication...</p>
+                </div>
+            </div>
+        );
+    }
+
     const handleApplyPromo = () => {
         if (promoCode.toLowerCase() === 'beauty10') {
             setDiscount(totalPrice * 0.1);
@@ -85,7 +118,21 @@ export default function CheckoutPage() {
         }
     };
 
+    const isShippingValid = shippingAddress.name && shippingAddress.email && 
+                            shippingAddress.street && shippingAddress.city && 
+                            shippingAddress.state && shippingAddress.zip && shippingAddress.phone;
+
+    // Log shipping address for debugging
+    console.log('[Checkout] Shipping address:', shippingAddress);
+    console.log('[Checkout] User email:', user?.email);
+
     const handlePlaceOrder = async () => {
+        // Validate shipping address before placing order
+        if (!isShippingValid) {
+            toast.error('Please complete all shipping information fields');
+            return;
+        }
+
         setIsProcessing(true);
         
         try {
@@ -146,10 +193,6 @@ export default function CheckoutPage() {
             setIsProcessing(false);
         }
     };
-
-    const isShippingValid = shippingAddress.name && shippingAddress.email && 
-                            shippingAddress.street && shippingAddress.city && 
-                            shippingAddress.state && shippingAddress.zip && shippingAddress.phone;
 
     return (
         <div className="min-h-screen bg-slate-50">

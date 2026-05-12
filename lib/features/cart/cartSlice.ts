@@ -3,6 +3,36 @@ import type { CartState } from '@/types'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000'
 
+// Local storage key for guest cart
+const GUEST_CART_KEY = 'guest-cart-items'
+
+// Helper functions for localStorage
+const saveGuestCart = (cartItems: Record<string, number>) => {
+    if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(GUEST_CART_KEY, JSON.stringify(cartItems))
+    }
+}
+
+const loadGuestCart = (): Record<string, number> => {
+    if (typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem(GUEST_CART_KEY)
+        if (saved) {
+            try {
+                return JSON.parse(saved)
+            } catch (error) {
+                console.error('Failed to parse guest cart:', error)
+            }
+        }
+    }
+    return {}
+}
+
+const clearGuestCart = () => {
+    if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(GUEST_CART_KEY)
+    }
+}
+
 const initialState: CartState = {
     total: 0,
     cartItems: {},
@@ -34,9 +64,15 @@ export const fetchCart = createAsyncThunk(
     'cart/fetchCart',
     async (_, { rejectWithValue }) => {
         try {
+            const token = getAuthToken()
             const headers: Record<string, string> = {
                 'Content-Type': 'application/json',
             }
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`
+            }
+            
+            console.log('[fetchCart] Fetching cart from server, token present:', !!token)
             
             const response = await fetch(`${API_BASE_URL}/api/cart`, {
                 headers,
@@ -44,7 +80,18 @@ export const fetchCart = createAsyncThunk(
             })
             const data = await response.json()
             
+            console.log('[fetchCart] Response status:', response.status)
+            console.log('[fetchCart] Response data:', data)
+            
             if (!response.ok) {
+                // Handle 401 gracefully for guest users
+                if (response.status === 401) {
+                    // Load guest cart from localStorage
+                    const guestCart = loadGuestCart()
+                    const total = Object.values(guestCart).reduce((sum, qty) => sum + qty, 0)
+                    console.log('[fetchCart] 401 - loading guest cart:', guestCart)
+                    return { cartItems: guestCart, total, isGuest: true }
+                }
                 return rejectWithValue(data.error)
             }
             
@@ -52,13 +99,54 @@ export const fetchCart = createAsyncThunk(
             const cartItems: Record<string, number> = {}
             let total = 0
             
-            data.cart.forEach((item: { productId: string; quantity: number }) => {
-                cartItems[item.productId] = item.quantity
-                total += item.quantity
-            })
+            console.log('[fetchCart] Backend cart data:', data.cart)
             
-            return { cartItems, total }
+            if (data.cart && Array.isArray(data.cart)) {
+                data.cart.forEach((item: any) => {
+                    // Handle different possible field names
+                    const productId = item.productId || item.product_id || item.id
+                    const quantity = item.quantity || item.qty || 1
+                    if (productId && quantity) {
+                        cartItems[productId] = quantity
+                        total += quantity
+                    }
+                })
+            }
+            
+            console.log('[fetchCart] Converted cartItems:', cartItems)
+            console.log('[fetchCart] Total items:', total)
+            
+            // If backend cart is empty but user is authenticated, check localStorage
+            if (token && Object.keys(cartItems).length === 0) {
+                const guestCart = loadGuestCart()
+                if (Object.keys(guestCart).length > 0) {
+                    console.log('[fetchCart] Backend cart empty, merging with localStorage cart:', guestCart)
+                    // Merge localStorage cart
+                    Object.entries(guestCart).forEach(([productId, quantity]) => {
+                        cartItems[productId] = quantity
+                        total += quantity
+                    })
+                    // Sync merged cart to backend
+                    try {
+                        await fetch(`${API_BASE_URL}/api/cart`, {
+                            method: 'POST',
+                            headers,
+                            body: JSON.stringify({ cart: Object.entries(cartItems).map(([productId, quantity]) => ({ productId, quantity })) }),
+                        })
+                    } catch (syncError) {
+                        console.error('[fetchCart] Failed to sync merged cart:', syncError)
+                    }
+                }
+            }
+            
+            // Clear guest cart after successful fetch for authenticated user
+            if (token) {
+                clearGuestCart()
+            }
+            
+            return { cartItems, total, isGuest: false }
         } catch (error) {
+            console.error('[fetchCart] Error:', error)
             return rejectWithValue('Failed to fetch cart')
         }
     }
@@ -114,6 +202,8 @@ const cartSlice = createSlice({
                 state.cartItems[productId] = 1
             }
             state.total += 1
+            // Save to localStorage for guest users
+            saveGuestCart(state.cartItems)
         },
         removeFromCart: (state, action: PayloadAction<{ productId: string }>) => {
             const { productId } = action.payload
@@ -124,18 +214,30 @@ const cartSlice = createSlice({
                 }
             }
             state.total -= 1
+            // Save to localStorage for guest users
+            saveGuestCart(state.cartItems)
         },
         deleteItemFromCart: (state, action: PayloadAction<{ productId: string }>) => {
             const { productId } = action.payload
             state.total -= state.cartItems[productId] ? state.cartItems[productId] : 0
             delete state.cartItems[productId]
+            // Save to localStorage for guest users
+            saveGuestCart(state.cartItems)
         },
         clearCart: (state) => {
             state.cartItems = {}
             state.total = 0
+            // Clear localStorage
+            clearGuestCart()
         },
         clearCartError: (state) => {
             state.error = null
+        },
+        setCartItems: (state, action: PayloadAction<Record<string, number>>) => {
+            state.cartItems = action.payload
+            state.total = Object.values(action.payload).reduce((sum, qty) => sum + qty, 0)
+            // Save to localStorage for guest users
+            saveGuestCart(state.cartItems)
         },
     },
     extraReducers: (builder) => {
