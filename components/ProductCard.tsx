@@ -3,6 +3,7 @@ import { StarIcon, ShoppingBagIcon, Store as StoreIcon } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { Product } from '@/types'
+import ProductRegulatory from './product/RegulatoryCompliance'
 
 interface ProductCardProps {
     product: Product;
@@ -88,6 +89,14 @@ const ProductCard = ({ product }: ProductCardProps) => {
                         {product.name}
                     </h3>
                 </Link>
+
+                {/* Regulatory Compliance (Compact) */}
+                {(product as any).regulatory && (
+                    <ProductRegulatory 
+                        regulatory={(product as any).regulatory} 
+                        compact={true} 
+                    />
+                )}
 
                 {/* Rating */}
                 <div className='flex items-center gap-1 mb-3'>

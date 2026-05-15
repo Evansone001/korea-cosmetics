@@ -5,6 +5,7 @@ import { ArrowLeft, Save, Upload, X, Plus, Trash2, Loader2, Check, AlertCircle, 
 import { apiClient } from '@/lib/api-client'
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
+import CategorySelector from './CategorySelector'
 
 interface ProductFormData {
   name: string
@@ -571,37 +572,15 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Category *
-                {validation.category?.hint && (
-                  <div className="text-xs text-slate-500 mb-1">
-                    💡 {validation.category.hint}
-                  </div>
-                )}
-              </label>
-              <select
-                name="category"
-                value={formData.category ?? ''}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent ${
-                  validation.category?.isValid === false ? 'border-red-300 focus:ring-red-500' : 'border-slate-300'
-                }`}
-              >
-                <option value="">Select a category</option>
-                {categories.map((cat: any) => (
-                  <option key={cat.id} value={cat.name}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-              {validation.category?.isValid === false && (
-                <div className="flex items-center gap-2 text-red-600 text-sm mt-1">
-                  <AlertCircle size={16} />
-                  <span>{validation.category.message}</span>
-                </div>
-              )}
-            </div>
+            <CategorySelector
+              value={formData.category ?? ''}
+              onChange={(value) => setFormData(prev => ({ ...prev, category: value }))}
+              categories={categories}
+              required={true}
+              error={validation.category?.isValid === false ? validation.category.message : undefined}
+              hint={validation.category?.hint}
+              disabled={isSubmitting}
+            />
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
