@@ -122,18 +122,19 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
   const [formProgress, setFormProgress] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response: any = await apiClient.getCategoriesHierarchical()
-        setCategories(response.categories || [])
-      } catch (error) {
-        console.error('Failed to fetch categories:', error)
-        setCategories([])
-      }
+  const fetchCategories = useCallback(async () => {
+    try {
+      const response: any = await apiClient.getCategoriesHierarchical()
+      setCategories(response.categories || [])
+    } catch (error) {
+      console.error('Failed to fetch categories:', error)
+      setCategories([])
     }
-    fetchCategories()
   }, [])
+
+  useEffect(() => {
+    fetchCategories()
+  }, [fetchCategories])
 
   // Load existing product data if editing
   useEffect(() => {
@@ -580,6 +581,7 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
               error={validation.category?.isValid === false ? validation.category.message : undefined}
               hint={validation.category?.hint}
               disabled={isSubmitting}
+              onCategoryCreated={fetchCategories}
             />
 
             <div>

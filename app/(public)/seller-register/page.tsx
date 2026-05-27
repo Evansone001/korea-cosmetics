@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Store, Mail, Lock, User, Eye, EyeOff, ArrowLeft, CheckCircle, Building2 } from 'lucide-react'
+import { apiClient } from '@/lib/api-client'
+import toast from 'react-hot-toast'
 
 export default function SellerRegister() {
     const router = useRouter()
@@ -44,35 +46,26 @@ export default function SellerRegister() {
         setLoading(true)
 
         try {
-            const response = await fetch('/api/auth/seller/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    first_name: formData.first_name,
-                    last_name: formData.last_name,
-                    email: formData.email,
-                    password: formData.password,
-                    phone: formData.phone || undefined
-                }),
-                credentials: 'include'
+            const response = await apiClient.register({
+                first_name: formData.first_name,
+                last_name: formData.last_name,
+                email: formData.email,
+                password: formData.password,
+                phone: formData.phone || undefined,
+                role: 'seller'
             })
 
-            const data = await response.json()
-
-            if (response.ok) {
+            if (response) {
                 setSuccess(true)
-                // Store token and redirect after 2 seconds
-                if (data.access_token) {
-                    localStorage.setItem('token', data.access_token)
-                    setTimeout(() => {
-                        router.push('/store') // Redirect to seller dashboard
-                    }, 2000)
-                }
-            } else {
-                setError(data.error || 'Registration failed. Please try again.')
+                toast.success('Seller account created successfully!')
+                // Redirect to apply-reseller page after 2 seconds
+                setTimeout(() => {
+                    router.push('/apply-reseller')
+                }, 2000)
             }
-        } catch (err) {
-            setError('Network error. Please check your connection and try again.')
+        } catch (err: any) {
+            setError(err.message || 'Registration failed. Please try again.')
+            toast.error('Registration failed')
         } finally {
             setLoading(false)
         }
@@ -87,7 +80,7 @@ export default function SellerRegister() {
                     </div>
                     <h2 className="text-2xl font-bold text-slate-800 mb-2">Registration Successful!</h2>
                     <p className="text-slate-600 mb-4">
-                        Your seller account has been created. Redirecting to your dashboard...
+                        Your account has been created. Redirecting to complete your reseller application...
                     </p>
                     <div className="w-full bg-slate-200 rounded-full h-2">
                         <div className="bg-green-500 h-2 rounded-full animate-pulse w-full"></div>

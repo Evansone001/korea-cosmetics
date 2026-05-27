@@ -3,9 +3,10 @@ import { usePathname, useRouter } from "next/navigation"
 import { HomeIcon, LayoutListIcon, SquarePenIcon, Store, ChevronLeft, ChevronRight, Package, ShoppingBag, Warehouse, Menu, X, LogOut, User, LucideIcon } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
-import { useState } from "react"
-import { useAppDispatch } from "@/lib/hooks"
+import { useState, useEffect } from "react"
+import { useAppDispatch, useAppSelector } from "@/lib/hooks"
 import { logout } from "@/lib/features/auth/authSlice"
+import { apiClient } from "@/lib/api-client"
 
 interface SidebarLink {
   name: string
@@ -28,8 +29,10 @@ const StoreSidebar = ({ storeInfo }: StoreSidebarProps) => {
   const pathname = usePathname()
   const router = useRouter()
   const dispatch = useAppDispatch()
+  const { user, isAuthenticated } = useAppSelector(state => state?.auth || { user: null, isAuthenticated: false, isLoading: true })
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isMobileOpen, setIsMobileOpen] = useState(false)
+  const [resellerStatus, setResellerStatus] = useState<'approved' | 'pending' | 'rejected' | 'none' | null>(null)
 
   const sidebarLinks: SidebarLink[] = [
     { name: 'Dashboard', href: '/store', icon: HomeIcon },
@@ -42,6 +45,45 @@ const StoreSidebar = ({ storeInfo }: StoreSidebarProps) => {
 
   const toggleSidebar = () => {
     setIsCollapsed(!isCollapsed)
+  }
+
+  // Fetch reseller application status
+  useEffect(() => {
+    const fetchResellerStatus = async () => {
+      if (isAuthenticated && user?.role === 'customer') {
+        try {
+          const response: any = await apiClient.getMyResellerApplication()
+          if (response.application) {
+            setResellerStatus(response.application.status)
+          } else {
+            setResellerStatus('none')
+          }
+        } catch (error) {
+          setResellerStatus('none')
+        }
+      } else if (user?.role === 'seller' || user?.role === 'admin') {
+        setResellerStatus('approved')
+      } else {
+        setResellerStatus(null)
+      }
+    }
+    fetchResellerStatus()
+  }, [isAuthenticated, user])
+
+  const handleNavigationClick = (e: React.MouseEvent, href: string) => {
+    if (resellerStatus !== 'approved') {
+      e.preventDefault()
+      if (resellerStatus === 'pending') {
+        alert('Your reseller application is pending approval. You can access seller features once approved.')
+        router.push('/reseller-application-status')
+      } else if (resellerStatus === 'rejected') {
+        alert('Your reseller application was rejected. Please submit a new application.')
+        router.push('/apply-reseller')
+      } else {
+        alert('You need to apply for reseller status to access seller features.')
+        router.push('/apply-reseller')
+      }
+    }
   }
 
   return (
@@ -71,9 +113,10 @@ const StoreSidebar = ({ storeInfo }: StoreSidebarProps) => {
         <div className="mt-6 flex-1">
           {
             sidebarLinks.map((link, index) => (
-              <Link 
-                key={index} 
-                href={link.href} 
+              <Link
+                key={index}
+                href={link.href}
+                onClick={(e) => handleNavigationClick(e, link.href)}
                 className={`relative flex items-center gap-3 text-slate-600 hover:bg-pink-50 hover:text-pink-600 p-2.5 transition ${pathname === link.href && 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-md'} ${isCollapsed ? 'justify-center px-2' : ''}`}
                 title={isCollapsed ? link.name : ''}
               >
@@ -160,10 +203,13 @@ const StoreSidebar = ({ storeInfo }: StoreSidebarProps) => {
               {sidebarLinks.map((link, index) => {
                 const isActive = pathname === link.href
                 return (
-                  <Link 
-                    key={index} 
-                    href={link.href} 
-                    onClick={() => setIsMobileOpen(false)}
+                  <Link
+                    key={index}
+                    href={link.href}
+                    onClick={(e) => {
+                      handleNavigationClick(e, link.href)
+                      setIsMobileOpen(false)
+                    }}
                     className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${isActive ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-md' : 'text-slate-600 hover:bg-pink-50 hover:text-pink-600'}`}
                   >
                     <link.icon size={20} />

@@ -30,18 +30,8 @@ const Hero = () => {
             // Redirect to seller dashboard wholesale category
             window.location.href = '/store/wholesale'
         } else {
-            // Show toast notification to create seller account
-            toast(() => (
-                <div className="flex flex-col gap-2">
-                    <span className="font-medium">B2B ordering requires a seller account</span>
-                    <Link 
-                        href="/seller-register" 
-                        className="bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 transition-colors text-center"
-                    >
-                        Create Seller Account
-                    </Link>
-                </div>
-            ), { duration: 5000 })
+            // Direct link to apply as seller page for authenticated customers
+            window.location.href = '/apply-reseller'
         }
     }
 
@@ -153,7 +143,10 @@ const Hero = () => {
                                     Shop Products
                                     <ArrowRightIcon size={20} />
                                 </Link>
-                                <Link href="/wholesale" className='inline-flex items-center gap-2 border border-pink-300 text-pink-700 px-8 py-4 rounded-lg hover:bg-pink-50 transition-colors font-medium'>
+                                <Link href={user ? '/apply-reseller' : '/seller-register'} className='inline-flex items-center gap-2 border border-pink-300 text-pink-700 px-8 py-4 rounded-lg hover:bg-pink-50 transition-colors font-medium'>
+                                    {user ? 'Apply as Seller' : 'Become a Seller'}
+                                </Link>
+                                <Link href="/wholesale" className='inline-flex items-center gap-2 border border-slate-300 text-slate-700 px-8 py-4 rounded-lg hover:bg-slate-50 transition-colors font-medium'>
                                     B2B Wholesale
                                 </Link>
                             </div>

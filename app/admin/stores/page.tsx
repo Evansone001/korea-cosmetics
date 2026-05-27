@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { Search, Filter, CheckCircle, XCircle, Store, X, Eye, MapPin, Mail, Phone, Calendar, User, MessageSquare, Bell, Send, Edit2, Trash2, Ban, Unlock, MoreHorizontal, Download, ChevronDown, Plus, AlertTriangle } from 'lucide-react'
+import { Search, Filter, CheckCircle, XCircle, Store, X, Eye, MapPin, Mail, Phone, Calendar, User, MessageSquare, Bell, Send, Edit2, Trash2, Ban, Unlock, MoreHorizontal, Download, ChevronDown, Plus, AlertTriangle, Clock } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import toast from 'react-hot-toast'
 
@@ -20,7 +20,7 @@ interface StoreRequest {
     contact: string
     business_type: string
     type: 'reseller' | 'wholesale'
-    status: 'active' | 'inactive' | 'suspended'
+    status: 'pending' | 'active' | 'inactive' | 'suspended'
     is_active: boolean
     created_at: string
     updated_at: string
@@ -44,7 +44,7 @@ interface Notification {
 
 export default function AdminStores() {
     const [searchQuery, setSearchQuery] = useState('')
-    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'suspended'>('all')
+    const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'active' | 'inactive' | 'suspended'>('all')
     const [typeFilter, setTypeFilter] = useState<'all' | 'reseller' | 'wholesale'>('all')
     const [dateFrom, setDateFrom] = useState('')
     const [dateTo, setDateTo] = useState('')
@@ -167,6 +167,29 @@ export default function AdminStores() {
         }
     }
 
+    const handleApproveStore = async (storeId: string) => {
+        try {
+            await apiClient.approveStore(storeId)
+            toast.success('Store approved successfully')
+            fetchStores()
+        } catch (error) {
+            toast.error('Failed to approve store')
+        }
+    }
+
+    const handleRejectStore = async (storeId: string) => {
+        const reason = prompt('Please enter rejection reason:')
+        if (!reason) return
+
+        try {
+            await apiClient.rejectStore(storeId, reason)
+            toast.success('Store rejected successfully')
+            fetchStores()
+        } catch (error) {
+            toast.error('Failed to reject store')
+        }
+    }
+
     const handleBulkSuspend = () => {
         const reason = 'Bulk suspension by admin'
         setStores(prev => prev.map(store => 
@@ -255,6 +278,8 @@ export default function AdminStores() {
                 return <CheckCircle className="w-5 h-5 text-green-600" />
             case 'inactive':
                 return <XCircle className="w-5 h-5 text-red-600" />
+            case 'pending':
+                return <Clock className="w-5 h-5 text-yellow-600" />
             case 'suspended':
                 return <Ban className="w-5 h-5 text-orange-600" />
             default:
@@ -269,6 +294,8 @@ export default function AdminStores() {
                 return 'bg-green-100 text-green-800'
             case 'inactive':
                 return 'bg-red-100 text-red-800'
+            case 'pending':
+                return 'bg-yellow-100 text-yellow-800'
             case 'suspended':
                 return 'bg-orange-100 text-orange-800'
         }
@@ -377,6 +404,7 @@ export default function AdminStores() {
                             className="px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                         >
                             <option value="all">All Status</option>
+                            <option value="pending">Pending</option>
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
                             <option value="suspended">Suspended</option>
@@ -540,7 +568,7 @@ export default function AdminStores() {
                                         <p className="text-xs sm:text-sm text-slate-600 whitespace-nowrap">{new Date(store.created_at).toLocaleDateString()}</p>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <StoreActionsDropdown 
+                                        <StoreActionsDropdown
                                             store={store}
                                             onView={() => {
                                                 setSelectedStore(store)
@@ -559,6 +587,8 @@ export default function AdminStores() {
                                                 setShowSuspendModal(true)
                                             }}
                                             onReactivate={() => handleReactivateStore(store.id)}
+                                            onApprove={() => handleApproveStore(store.id)}
+                                            onReject={() => handleRejectStore(store.id)}
                                         />
                                     </td>
                                 </tr>
@@ -833,9 +863,11 @@ interface StoreActionsDropdownProps {
     onDelete: () => void
     onSuspend: () => void
     onReactivate: () => void
+    onApprove?: () => void
+    onReject?: () => void
 }
 
-function StoreActionsDropdown({ store, onView, onEdit, onDelete, onSuspend, onReactivate }: StoreActionsDropdownProps) {
+function StoreActionsDropdown({ store, onView, onEdit, onDelete, onSuspend, onReactivate, onApprove, onReject }: StoreActionsDropdownProps) {
     const [isOpen, setIsOpen] = useState(false)
     const buttonRef = useRef<HTMLButtonElement>(null)
     const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 })
@@ -903,6 +935,24 @@ function StoreActionsDropdown({ store, onView, onEdit, onDelete, onSuspend, onRe
                         <Edit2 className="w-4 h-4" />
                         Edit Store
                     </button>
+                    {store.status === 'pending' && (
+                        <>
+                            <button
+                                onClick={() => { onApprove?.(); setIsOpen(false) }}
+                                className="w-full px-3 sm:px-4 py-2 text-left text-sm text-green-600 hover:bg-green-50 flex items-center gap-2"
+                            >
+                                <CheckCircle className="w-4 h-4" />
+                                Approve
+                            </button>
+                            <button
+                                onClick={() => { onReject?.(); setIsOpen(false) }}
+                                className="w-full px-3 sm:px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                            >
+                                <XCircle className="w-4 h-4" />
+                                Reject
+                            </button>
+                        </>
+                    )}
                     {store.suspended_at ? (
                         <button
                             onClick={() => { onReactivate(); setIsOpen(false) }}

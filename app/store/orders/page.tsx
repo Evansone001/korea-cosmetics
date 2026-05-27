@@ -92,58 +92,76 @@ export default function StoreOrdersPage() {
     fetchStats();
   }, [statusFilter, activeTab]);
 
-  // Add real-time polling for admin updates
+  // Polling for real-time updates
   useEffect(() => {
     const interval = setInterval(() => {
       fetchOrders();
       fetchStats();
-    }, 30000); // Poll every 30 seconds
-
+    }, 30000);
     return () => clearInterval(interval);
   }, [statusFilter, activeTab]);
 
+  // FIXED: Handles both customer and wholesale order structures
   const fetchOrders = async () => {
     try {
       setLoading(true);
       const response = activeTab === 'customer'
-        ? await apiClient.getStoreOrders({
-            status: statusFilter || undefined,
-            limit: 50
-          })
-        : await apiClient.getWholesaleOrders({
-            status: statusFilter || undefined,
-            limit: 50
-          });
+        ? await apiClient.getStoreOrders({ status: statusFilter || undefined, limit: 50 })
+        : await apiClient.getWholesaleOrders({ status: statusFilter || undefined, limit: 50 });
 
-      // Transform backend orders to frontend format
-      const transformedOrders = response?.orders?.map((order: any) => ({
-        id: order.id,
-        customerName: order.customer?.name || 'Unknown',
-        customerEmail: order.customer?.email || '',
-        customerPhone: order.customer?.phone || '',
-        shippingAddress: order.shipping_address || {
-          street: '',
-          city: '',
-          state: '',
-          zipCode: '',
-          country: ''
-        },
-        items: order.items?.map((item: any) => ({
-          productId: item.product_id,
-          productName: item.product_name,
-          quantity: item.quantity,
-          unitPrice: item.price,
-          total: item.total
-        })) || [],
-        subtotal: order.total,
-        shipping: 0,
-        tax: 0,
-        total: order.total,
-        status: order.status,
-        paymentStatus: order.is_paid ? ('paid' as const) : ('pending' as const),
-        createdAt: order.created_at,
-        updatedAt: order.updated_at
-      })) || [];
+      const transformedOrders: Order[] = (response?.orders || []).map((order: any) => {
+        // Handle different field names (wholesale vs customer)
+        const orderTotal = order.total_amount ?? order.total ?? 0;
+        const orderStatus = order.status ?? 'pending';
+        const orderCreatedAt = order.created_at ?? order.createdAt ?? new Date().toISOString();
+        const orderUpdatedAt = order.updated_at ?? order.updatedAt ?? orderCreatedAt;
+
+        const items: OrderItem[] = (order.items || []).map((item: any) => ({
+          productId: item.product_id ?? item.productId,
+          productName: item.product_name ?? item.productName ?? 'Unknown Product',
+          quantity: item.quantity ?? 0,
+          unitPrice: item.unit_price ?? item.unitPrice ?? item.price ?? 0,
+          total: item.total ?? item.line_total ?? (item.quantity * (item.unit_price ?? item.price ?? 0)),
+        }));
+
+        // Build shipping address with proper defaults
+        const rawAddress = order.shipping_address || order.shippingAddress || {
+          street: order.address_line1 || '',
+          city: order.city || '',
+          state: order.state || '',
+          zipCode: order.postal_code || order.zipCode || '',
+          country: order.country || ''
+        };
+
+        const shippingAddress = {
+          street: rawAddress.street || '',
+          city: rawAddress.city || '',
+          state: rawAddress.state || '',
+          zipCode: rawAddress.zipCode || '',
+          country: rawAddress.country || ''
+        };
+
+        // Customer name fallback for wholesale orders
+        const customerName = order.customer?.name || order.storeName || 'Wholesale Purchase';
+
+        return {
+          id: order.id,
+          customerName,
+          customerEmail: order.customer?.email || '',
+          customerPhone: order.customer?.phone || '',
+          shippingAddress,
+          items,
+          subtotal: orderTotal,
+          shipping: order.shipping ?? 0,
+          tax: order.tax ?? 0,
+          total: orderTotal,
+          status: orderStatus,
+          paymentStatus: (order.is_paid ? 'paid' : 'pending') as 'paid' | 'pending', // explicit cast
+          notes: order.notes,
+          createdAt: orderCreatedAt,
+          updatedAt: orderUpdatedAt,
+        };
+      });
 
       setOrders(transformedOrders);
     } catch (error) {
@@ -154,6 +172,7 @@ export default function StoreOrdersPage() {
     }
   };
 
+  // FIXED: Handles both customer and wholesale stats
   const fetchStats = async () => {
     try {
       const response = activeTab === 'customer'
@@ -167,18 +186,19 @@ export default function StoreOrdersPage() {
           totalRevenue: orderStats.total_revenue || 0,
           pending: response?.status_breakdown?.order_placed || 0,
           processing: response?.status_breakdown?.processing || 0,
-          shipped: response.status_breakdown?.shipped || 0,
-          delivered: response.status_breakdown?.delivered || 0
+          shipped: response?.status_breakdown?.shipped || 0,
+          delivered: response?.status_breakdown?.delivered || 0
         });
       } else {
-        const wholesaleStats = response.statistics || {};
+        // Wholesale stats – adjust for possible different field names
+        const wholesaleStats = response?.statistics || response || {};
         setStats({
-          totalOrders: wholesaleStats.total_orders || 0,
-          totalRevenue: wholesaleStats.total_revenue || 0,
-          pending: response.status_breakdown?.order_placed || 0,
-          processing: response.status_breakdown?.processing || 0,
-          shipped: response.status_breakdown?.shipped || 0,
-          delivered: response.status_breakdown?.delivered || 0
+          totalOrders: wholesaleStats.total_orders || wholesaleStats.totalOrders || 0,
+          totalRevenue: wholesaleStats.total_revenue || wholesaleStats.totalRevenue || 0,
+          pending: wholesaleStats.pending || response?.status_breakdown?.pending || 0,
+          processing: wholesaleStats.processing || response?.status_breakdown?.processing || 0,
+          shipped: wholesaleStats.shipped || response?.status_breakdown?.shipped || 0,
+          delivered: wholesaleStats.delivered || response?.status_breakdown?.delivered || 0
         });
       }
     } catch (error) {
@@ -227,10 +247,8 @@ export default function StoreOrdersPage() {
       setSelectedOrder(null);
     } catch (error: any) {
       console.error('Failed to update order status:', error);
-      // Extract error message from backend response
       const errorMessage = error?.response?.data?.error || error?.message || error?.error || 'Failed to update order status';
       toast.error(errorMessage);
-      // Keep modal open so user can see the error and try again
     }
   };
 
@@ -353,7 +371,9 @@ export default function StoreOrdersPage() {
               <DollarSign className="text-white" size={20} />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-900">{activeTab === 'customer' ? '$' : 'KES '}{stats.totalRevenue.toFixed(0)}</p>
+              <p className="text-2xl font-bold text-slate-900">
+                {activeTab === 'customer' ? '$' : 'KES '}{stats.totalRevenue.toFixed(0)}
+              </p>
               <p className="text-sm text-slate-500">{activeTab === 'customer' ? 'Revenue' : 'Cost'}</p>
             </div>
           </div>

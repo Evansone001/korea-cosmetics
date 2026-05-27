@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Search, CheckCircle, XCircle, Clock, Store, AlertTriangle, Package } from 'lucide-react'
+import { Search, CheckCircle, XCircle, Clock, Store, AlertTriangle, Package, User, Building2 } from 'lucide-react'
 import { apiClient, Product } from '@/lib/api-client'
 import toast from 'react-hot-toast'
 import Image from 'next/image'
@@ -32,13 +32,50 @@ interface StoreRequest {
     rejection_reason?: string
 }
 
+interface ResellerApplication {
+    id: string
+    user_id: string
+    business_name: string
+    business_description: string
+    business_phone: string
+    business_email: string
+    business_address: string
+    business_city: string
+    business_country: string
+    tax_id: string
+    business_license: string
+    years_in_business: number
+    website_url: string
+    status: 'pending' | 'approved' | 'rejected'
+    admin_comments: string
+    rejection_reason: string
+    approved_at: string
+    rejected_at: string
+    created_at: string
+    updated_at: string
+}
+
 export default function AdminApprove() {
-    const [activeTab, setActiveTab] = useState<'stores' | 'products'>('stores')
+    const [activeTab, setActiveTab] = useState<'resellers' | 'stores' | 'products'>('resellers')
     const [searchQuery, setSearchQuery] = useState('')
+    const [resellerApplications, setResellerApplications] = useState<ResellerApplication[]>([])
     const [stores, setStores] = useState<StoreRequest[]>([])
     const [products, setProducts] = useState<Product[]>([])
     const [loading, setLoading] = useState(true)
     const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+    const fetchPendingResellerApplications = async () => {
+        try {
+            setLoading(true)
+            const response: any = await apiClient.getResellerApplications({ status: 'pending' })
+            setResellerApplications(response.applications || [])
+        } catch (error) {
+            console.error('Failed to fetch pending reseller applications:', error)
+            toast.error('Failed to load pending reseller applications')
+        } finally {
+            setLoading(false)
+        }
+    }
 
     const fetchPendingStores = async () => {
         try {
@@ -74,12 +111,46 @@ export default function AdminApprove() {
     }
 
     useEffect(() => {
-        if (activeTab === 'stores') {
+        if (activeTab === 'resellers') {
+            fetchPendingResellerApplications()
+        } else if (activeTab === 'stores') {
             fetchPendingStores()
         } else {
             fetchPendingProducts()
         }
     }, [activeTab])
+
+    const handleApproveReseller = async (applicationId: string) => {
+        const comments = prompt('Enter admin comments (optional):')
+        try {
+            setActionLoading(applicationId)
+            await apiClient.approveResellerApplication(applicationId, comments || undefined)
+            toast.success('Reseller application approved successfully')
+            fetchPendingResellerApplications()
+        } catch (error) {
+            console.error('Failed to approve reseller application:', error)
+            toast.error('Failed to approve reseller application')
+        } finally {
+            setActionLoading(null)
+        }
+    }
+
+    const handleRejectReseller = async (applicationId: string) => {
+        const reason = prompt('Please enter rejection reason:')
+        if (!reason) return
+
+        try {
+            setActionLoading(applicationId)
+            await apiClient.rejectResellerApplication(applicationId, reason)
+            toast.success('Reseller application rejected successfully')
+            fetchPendingResellerApplications()
+        } catch (error) {
+            console.error('Failed to reject reseller application:', error)
+            toast.error('Failed to reject reseller application')
+        } finally {
+            setActionLoading(null)
+        }
+    }
 
     const handleApprove = async (storeId: string) => {
         try {
@@ -143,6 +214,12 @@ export default function AdminApprove() {
         }
     }
 
+    const filteredResellerApplications = resellerApplications.filter(app => {
+        return app.business_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+               app.business_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+               app.business_city.toLowerCase().includes(searchQuery.toLowerCase())
+    })
+
     const filteredStores = stores.filter(store => {
         const matchesSearch = store.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                             store.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -196,6 +273,7 @@ export default function AdminApprove() {
         )
     }
 
+    const pendingResellerCount = resellerApplications.length
     const pendingCount = stores.length
     const pendingProductCount = products.length
 
@@ -210,6 +288,22 @@ export default function AdminApprove() {
 
             {/* Tabs */}
             <div className="flex gap-2 mb-6">
+                <button
+                    onClick={() => setActiveTab('resellers')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                        activeTab === 'resellers'
+                            ? 'bg-slate-900 text-white'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                >
+                    <User size={18} />
+                    Resellers
+                    {pendingResellerCount > 0 && (
+                        <span className="ml-1 px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs rounded-full">
+                            {pendingResellerCount}
+                        </span>
+                    )}
+                </button>
                 <button
                     onClick={() => setActiveTab('stores')}
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
@@ -246,7 +340,37 @@ export default function AdminApprove() {
 
             {/* Stats */}
             <div className="grid grid-cols-3 gap-4 mb-6">
-                {activeTab === 'stores' ? (
+                {activeTab === 'resellers' ? (
+                    <>
+                        <div className="bg-white border border-slate-200 rounded-lg p-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-slate-500">Pending Resellers</p>
+                                    <p className="text-2xl font-bold text-yellow-600">{resellerApplications.length}</p>
+                                </div>
+                                <Clock className="w-8 h-8 text-yellow-500" />
+                            </div>
+                        </div>
+                        <div className="bg-white border border-slate-200 rounded-lg p-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-slate-500">Total Applications</p>
+                                    <p className="text-2xl font-bold text-slate-900">{resellerApplications.length}</p>
+                                </div>
+                                <User className="w-8 h-8 text-slate-400" />
+                            </div>
+                        </div>
+                        <div className="bg-white border border-slate-200 rounded-lg p-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-slate-500">Avg. Wait Time</p>
+                                    <p className="text-2xl font-bold text-blue-600">-</p>
+                                </div>
+                                <Clock className="w-8 h-8 text-blue-500" />
+                            </div>
+                        </div>
+                    </>
+                ) : activeTab === 'stores' ? (
                     <>
                         <div className="bg-white border border-slate-200 rounded-lg p-4">
                             <div className="flex items-center justify-between">
@@ -318,7 +442,7 @@ export default function AdminApprove() {
                 <div className="flex items-center justify-center py-12">
                     <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin"></div>
                     <p className="ml-3 text-slate-600">
-                        {activeTab === 'stores' ? 'Loading pending stores...' : 'Loading pending products...'}
+                        {activeTab === 'resellers' ? 'Loading pending reseller applications...' : activeTab === 'stores' ? 'Loading pending stores...' : 'Loading pending products...'}
                     </p>
                 </div>
             )}
@@ -342,6 +466,91 @@ export default function AdminApprove() {
             )}
 
             {/* Content List */}
+            {!loading && activeTab === 'resellers' && (
+                <div className="space-y-4">
+                    {filteredResellerApplications.map((application) => (
+                        <div key={application.id} className="bg-white border border-slate-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+                            <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <User className="w-5 h-5 text-purple-500" />
+                                        <span className="px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-700">
+                                            Reseller Application
+                                        </span>
+                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                            <Clock className="w-4 h-4" />
+                                            Pending
+                                        </span>
+                                    </div>
+                                    
+                                    <h3 className="text-lg font-semibold text-slate-800">{application.business_name}</h3>
+                                    <p className="text-sm text-slate-500">{application.business_email} • {application.business_phone}</p>
+                                    <p className="text-slate-600 mt-2">{application.business_description}</p>
+                                    
+                                    <div className="flex gap-4 mt-3 text-sm">
+                                        <span className="text-slate-500">
+                                            Location: <span className="font-medium text-slate-700">{application.business_city}, {application.business_country}</span>
+                                        </span>
+                                        {application.years_in_business > 0 && (
+                                            <span className="text-slate-500">
+                                                Experience: <span className="font-medium text-slate-700">{application.years_in_business} years</span>
+                                            </span>
+                                        )}
+                                    </div>
+                                    
+                                    {application.tax_id && (
+                                        <p className="text-xs text-slate-500 mt-2">
+                                            Tax ID: {application.tax_id}
+                                        </p>
+                                    )}
+                                    
+                                    {application.website_url && (
+                                        <p className="text-xs text-slate-500 mt-1">
+                                            Website: <a href={application.website_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{application.website_url}</a>
+                                        </p>
+                                    )}
+                                    
+                                    <p className="text-xs text-slate-400 mt-3">
+                                        Submitted on {new Date(application.created_at).toLocaleDateString()}
+                                    </p>
+                                </div>
+
+                                <div className="flex flex-col gap-2 ml-4">
+                                    {actionLoading === application.id ? (
+                                        <div className="w-24 h-10 flex items-center justify-center">
+                                            <div className="w-5 h-5 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin"></div>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <button
+                                                onClick={() => handleApproveReseller(application.id)}
+                                                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                                            >
+                                                <CheckCircle size={16} />
+                                                Approve
+                                            </button>
+                                            <button
+                                                onClick={() => handleRejectReseller(application.id)}
+                                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+                                            >
+                                                <XCircle size={16} />
+                                                Reject
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {filteredResellerApplications.length === 0 && (
+                        <div className="text-center py-12 bg-white border border-slate-200 rounded-lg">
+                            <User className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                            <p className="text-slate-500">No pending reseller applications found</p>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {!loading && activeTab === 'stores' && (
                 <div className="space-y-4">
                     {filteredStores.map((store) => (

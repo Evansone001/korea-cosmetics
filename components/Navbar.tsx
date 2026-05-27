@@ -8,6 +8,7 @@ import { useAppSelector, useAppDispatch } from "@/lib/hooks";
 import { assets } from "@/assets/assets";
 import { logout, setUser } from "@/lib/features/auth/authSlice";
 import { useCartPath } from "@/hooks/useCartPath";
+import { apiClient } from "@/lib/api-client";
 
 const Navbar = () => {
     const router = useRouter();
@@ -16,6 +17,7 @@ const Navbar = () => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
     const [isProfileOpen, setIsProfileOpen] = useState(false)
     const [isDeliveryOpen, setIsDeliveryOpen] = useState(false)
+    const [resellerStatus, setResellerStatus] = useState<'approved' | 'pending' | 'rejected' | 'none' | null>(null)
     const cartCount = useAppSelector(state => state.cart.total)
     const { user, isAuthenticated } = useAppSelector(state => state?.auth || { user: null, isAuthenticated: false, isLoading: true })
     const profileRef = useRef<HTMLDivElement>(null)
@@ -46,6 +48,29 @@ const Navbar = () => {
         restoreAuth()
     }, [isAuthenticated, dispatch])
 
+    // Fetch reseller application status
+    useEffect(() => {
+        const fetchResellerStatus = async () => {
+            if (isAuthenticated && user?.role === 'customer') {
+                try {
+                    const response: any = await apiClient.getMyResellerApplication()
+                    if (response.application) {
+                        setResellerStatus(response.application.status)
+                    } else {
+                        setResellerStatus('none')
+                    }
+                } catch (error) {
+                    setResellerStatus('none')
+                }
+            } else if (user?.role === 'seller' || user?.role === 'admin') {
+                setResellerStatus('approved')
+            } else {
+                setResellerStatus(null)
+            }
+        }
+        fetchResellerStatus()
+    }, [isAuthenticated, user])
+
     // Sample African countries with flags
     const countries = [
         { code: 'NG', name: 'Nigeria', flag: '🇳🇬' },
@@ -71,6 +96,22 @@ const Navbar = () => {
         }
     }
 
+    const handleNavigationClick = (e: React.MouseEvent, href: string, isSellerFeature: boolean = false) => {
+        if (isSellerFeature && resellerStatus !== 'approved') {
+            e.preventDefault()
+            if (resellerStatus === 'pending') {
+                alert('Your reseller application is pending approval. You can access seller features once approved.')
+                router.push('/reseller-application-status')
+            } else if (resellerStatus === 'rejected') {
+                alert('Your reseller application was rejected. Please submit a new application.')
+                router.push('/apply-reseller')
+            } else {
+                alert('You need to apply for reseller status to access seller features.')
+                router.push('/apply-reseller')
+            }
+        }
+    }
+
     // Close profile dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -87,11 +128,11 @@ const Navbar = () => {
     }, [])
 
     const navigation = [
-        { name: 'Shop', href: '/shop' },
-        { name: 'Stores', href: '/stores' },
-        { name: 'B2B Wholesale', href: '/wholesale' },
-        { name: 'Manufacturers', href: '/manufacturers' },
-        { name: 'About', href: '/about' },
+        { name: 'Shop', href: '/shop', isSellerFeature: false },
+        { name: 'Stores', href: '/stores', isSellerFeature: false },
+        { name: 'B2B Wholesale', href: '/wholesale', isSellerFeature: true },
+        { name: 'Manufacturers', href: '/manufacturers', isSellerFeature: false },
+        { name: 'About', href: '/about', isSellerFeature: false },
     ]
 
     return (
@@ -116,6 +157,7 @@ const Navbar = () => {
                             <Link
                                 key={item.name}
                                 href={item.href}
+                                onClick={(e) => handleNavigationClick(e, item.href, item.isSellerFeature)}
                                 className="text-slate-700 hover:text-blue-600 transition-colors font-medium"
                             >
                                 {item.name}
@@ -235,13 +277,31 @@ const Navbar = () => {
                                             >
                                                 Orders
                                             </Link>
-                                            {(user?.role === 'seller' || user?.role === 'admin') && (
+                                            {user?.role === 'customer' && (
+                                                <Link
+                                                    href="/apply-reseller"
+                                                    className="block px-4 py-2 text-slate-700 hover:bg-gray-50 transition-colors"
+                                                    onClick={() => setIsProfileOpen(false)}
+                                                >
+                                                    Apply as Seller
+                                                </Link>
+                                            )}
+                                            {(user?.role === 'seller' || user?.role === 'admin' || resellerStatus === 'approved') && (
                                                 <Link
                                                     href="/store"
                                                     className="block px-4 py-2 text-slate-700 hover:bg-gray-50 transition-colors"
                                                     onClick={() => setIsProfileOpen(false)}
                                                 >
                                                     Seller Dashboard
+                                                </Link>
+                                            )}
+                                            {user?.role === 'customer' && resellerStatus === 'pending' && (
+                                                <Link
+                                                    href="/reseller-application-status"
+                                                    className="block px-4 py-2 text-slate-700 hover:bg-gray-50 transition-colors"
+                                                    onClick={() => setIsProfileOpen(false)}
+                                                >
+                                                    View Application Status
                                                 </Link>
                                             )}
                                             {user?.role === 'admin' && (
@@ -354,8 +414,11 @@ const Navbar = () => {
                                         <Link
                                             key={item.name}
                                             href={item.href}
+                                            onClick={(e) => {
+                                                handleNavigationClick(e, item.href, item.isSellerFeature)
+                                                setIsMobileMenuOpen(false)
+                                            }}
                                             className="block px-3 py-3 text-slate-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors font-medium"
-                                            onClick={() => setIsMobileMenuOpen(false)}
                                         >
                                             {item.name}
                                         </Link>
@@ -386,13 +449,31 @@ const Navbar = () => {
                                             >
                                                 Orders
                                             </Link>
-                                            {(user?.role === 'seller' || user?.role === 'admin') && (
+                                            {user?.role === 'customer' && (
+                                                <Link
+                                                    href="/apply-reseller"
+                                                    className="block px-3 py-3 text-pink-700 hover:bg-pink-50 rounded-lg transition-colors font-medium"
+                                                    onClick={() => setIsMobileMenuOpen(false)}
+                                                >
+                                                    Apply as Seller
+                                                </Link>
+                                            )}
+                                            {(user?.role === 'seller' || user?.role === 'admin' || resellerStatus === 'approved') && (
                                                 <Link
                                                     href="/store"
                                                     className="block px-3 py-3 text-slate-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors"
                                                     onClick={() => setIsMobileMenuOpen(false)}
                                                 >
                                                     Seller Dashboard
+                                                </Link>
+                                            )}
+                                            {user?.role === 'customer' && resellerStatus === 'pending' && (
+                                                <Link
+                                                    href="/reseller-application-status"
+                                                    className="block px-3 py-3 text-slate-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors"
+                                                    onClick={() => setIsMobileMenuOpen(false)}
+                                                >
+                                                    View Application Status
                                                 </Link>
                                             )}
                                             {user?.role === 'admin' && (

@@ -6,6 +6,7 @@ import Link from "next/link"
 import { ArrowRightIcon } from "lucide-react"
 import SellerNavbar from "./StoreNavbar"
 import SellerSidebar from "./StoreSidebar"
+import NotificationCenter from "./NotificationCenter"
 import { useAppSelector, useAppDispatch } from "@/lib/hooks"
 import { setUser, setAuthenticated } from "@/lib/features/auth/authSlice"
 import toast from "react-hot-toast"
@@ -29,6 +30,8 @@ const StoreLayout = ({ children }: StoreLayoutProps) => {
   const [localLoading, setLocalLoading] = useState(true)
   const [isAuthorized, setIsAuthorized] = useState(false)
   const [storeInfo, setStoreInfo] = useState<StoreInfo | null>(null)
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
 
   const fetchStoreInfo = async () => {
     try {
@@ -40,9 +43,18 @@ const StoreLayout = ({ children }: StoreLayoutProps) => {
           username: response.store.username || response.store.id,
           logo: response.store.logo || null,
         })
+      } else {
+        // User has seller role but no store - redirect to create store
+        console.log('[StoreLayout] User has no store, redirecting to create store')
+        router.push('/create-store')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.log('[StoreLayout] No store found or error:', error)
+      // If 404, redirect to create store
+      if (error?.message?.includes('404') || error?.status === 404) {
+        console.log('[StoreLayout] 404 error, redirecting to create store')
+        router.push('/create-store')
+      }
     }
   }
 
@@ -141,13 +153,20 @@ const StoreLayout = ({ children }: StoreLayoutProps) => {
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-pink-50 to-rose-50">
-      <SellerNavbar />
+      <SellerNavbar 
+        onNotificationsClick={() => setShowNotifications(true)}
+        unreadCount={unreadCount}
+      />
       <div className="flex flex-1 relative">
         <SellerSidebar storeInfo={storeInfo} />
         <div className="flex-1 h-full p-5 lg:pl-12 lg:pt-12 overflow-y-scroll">
           {children}
         </div>
       </div>
+      <NotificationCenter 
+        isOpen={showNotifications}
+        onClose={() => setShowNotifications(false)}
+      />
     </div>
   )
 }

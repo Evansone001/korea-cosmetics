@@ -2,8 +2,14 @@
 import Link from "next/link"
 import Image from "next/image"
 import { assets } from "@/assets/assets"
+import { Bell } from "lucide-react"
 
-const StoreNavbar = () => {
+interface StoreNavbarProps {
+  onNotificationsClick?: () => void
+  unreadCount?: number
+}
+
+const StoreNavbar = ({ onNotificationsClick, unreadCount = 0 }: StoreNavbarProps) => {
   return (
     <div className="flex items-center justify-between px-4 sm:px-12 py-3 border-b border-pink-200 transition-all">
       {/* Spacer for mobile centering */}
@@ -27,6 +33,17 @@ const StoreNavbar = () => {
       </Link>
 
       <div className="flex items-center gap-3">
+        <button
+          onClick={onNotificationsClick}
+          className="relative p-2 hover:bg-pink-100 rounded-lg transition-colors"
+        >
+          <Bell className="w-5 h-5 text-slate-700" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </button>
         <p className="hidden sm:block text-sm text-slate-600">Hi, Seller</p>
       </div>
     </div>

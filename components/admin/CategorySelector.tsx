@@ -22,6 +22,7 @@ interface CategorySelectorProps {
   hint?: string
   className?: string
   disabled?: boolean
+  onCategoryCreated?: () => void
 }
 
 export default function CategorySelector({
@@ -33,7 +34,8 @@ export default function CategorySelector({
   error,
   hint,
   className = "",
-  disabled = false
+  disabled = false,
+  onCategoryCreated
 }: CategorySelectorProps) {
   const [showAddCategory, setShowAddCategory] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
@@ -78,6 +80,10 @@ export default function CategorySelector({
         setShowAddCategory(false)
         setShowCreateOption(false)
         toast.success(`Category "${newCategory.name}" created successfully!`)
+        // Trigger parent to refresh categories
+        if (onCategoryCreated) {
+          onCategoryCreated()
+        }
       }
     } catch (error: any) {
       console.error('Error creating category:', error)

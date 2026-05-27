@@ -599,6 +599,15 @@ export default function Profile() {
                                     <span className="text-slate-400">→</span>
                                 </div>
                             </button>
+                            <button 
+                                onClick={() => window.location.href = '/apply-reseller'}
+                                className="w-full text-left px-4 py-3 border border-pink-200 rounded-lg hover:bg-pink-50 transition-colors"
+                            >
+                                <div className="flex justify-between items-center">
+                                    <span className="text-pink-700 font-medium">Apply as Seller</span>
+                                    <span className="text-pink-400">→</span>
+                                </div>
+                            </button>
                             <button className="w-full text-left px-4 py-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
                                 <div className="flex justify-between items-center">
                                     <span className="text-slate-700">Wishlist</span>

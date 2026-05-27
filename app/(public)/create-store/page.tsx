@@ -115,6 +115,36 @@ export default function CreateStore() {
             // First check if user is authenticated
             await apiClient.getCurrentUser()
 
+            // Check if user has approved reseller application
+            try {
+                const resellerResponse: any = await apiClient.getMyResellerApplication()
+                if (resellerResponse.application) {
+                    if (resellerResponse.application.status !== 'approved') {
+                        // User has pending or rejected reseller application
+                        setAlreadySubmitted(true)
+                        setStatus(resellerResponse.application.status)
+                        if (resellerResponse.application.status === 'pending') {
+                            setMessage("Your reseller application is pending approval. You can create a store after your application is approved.")
+                        } else if (resellerResponse.application.status === 'rejected') {
+                            setMessage(`Your reseller application was rejected. ${resellerResponse.application.rejection_reason || 'Please submit a new application.'}`)
+                        }
+                        setLoading(false)
+                        return
+                    }
+                    // Reseller application is approved, proceed to check store
+                }
+            } catch (resellerError: any) {
+                // No reseller application found - redirect to apply
+                if (!resellerError.message || !resellerError.message.includes('404')) {
+                    console.error('Error checking reseller application:', resellerError)
+                }
+                setAlreadySubmitted(true)
+                setStatus('no_reseller')
+                setMessage("You need to apply for reseller status before creating a store.")
+                setLoading(false)
+                return
+            }
+
             // Then check if store exists
             const response: any = await apiClient.getMyStore()
             if (response.store) {
@@ -465,17 +495,30 @@ export default function CreateStore() {
                             <Store className="w-10 h-10 text-pink-500" />
                         </div>
                         <p className="sm:text-2xl lg:text-3xl font-semibold text-slate-700 text-center mb-4">{message}</p>
-                        {status === "pending" && (
+                        {status === "no_reseller" && (
                             <div className="mt-6">
-                                <p className="text-slate-500 mb-4">You&apos;ll be notified via email once your application is reviewed.</p>
+                                <Link href="/apply-reseller" className="inline-flex items-center gap-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white px-6 py-3 rounded-lg hover:shadow-lg transition-all">
+                                    Apply for Reseller Status
+                                    <ArrowRight size={18} />
+                                </Link>
+                            </div>
+                        )}
+                        {(status === "pending" || status === "rejected") && (
+                            <div className="mt-6">
+                                <Link href="/reseller-application-status" className="inline-flex items-center gap-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white px-6 py-3 rounded-lg hover:shadow-lg transition-all">
+                                    View Application Status
+                                    <ArrowRight size={18} />
+                                </Link>
+                            </div>
+                        )}
+                        {status === "active" && (
+                            <div className="mt-6">
+                                <p className="text-slate-500 mb-4">Your store is already active!</p>
                                 <Link href="/store" className="inline-flex items-center gap-2 text-pink-600 hover:text-pink-700 font-medium">
                                     Go to Store Dashboard
                                     <ArrowRight size={18} />
                                 </Link>
                             </div>
-                        )}
-                        {status === "approved" && (
-                            <p className="mt-5 text-slate-400">Redirecting to dashboard...</p>
                         )}
                     </div>
                 </div>

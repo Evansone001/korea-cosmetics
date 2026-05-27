@@ -3,6 +3,7 @@
 // Now uses Axios for HTTP requests
 
 import axiosInstance from './axios';
+import type { PurchaseRequest } from "../types/purchase";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000'
 
@@ -365,48 +366,45 @@ class ApiClient {
   options: RequestInit = {}
 ): Promise<T> {
   try {
-    // Fix double /api/ when baseURL ends with /api and endpoint starts with /api/
+    // Fix double /api/ if needed
     let url = `${this.baseURL}${endpoint}`;
     if (this.baseURL.endsWith('/api') && endpoint.startsWith('/api/')) {
-      url = `${this.baseURL}${endpoint.slice(4)}`; // Remove '/api' from endpoint
+      url = `${this.baseURL}${endpoint.slice(4)}`;
     }
 
-    // Convert fetch options to axios config
+    // 1. Build headers – auto-set JSON content type if body exists
+    const headers: Record<string, string> = {
+      ...(options.headers as Record<string, string>),
+    };
+
+    // 2. If body is a plain object (and not FormData), assume JSON
+    if (options.body && !(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+      // If body is an object, stringify it for axios
+      if (typeof options.body === 'object') {
+        options.body = JSON.stringify(options.body);
+      }
+    }
+
     const axiosConfig: any = {
       method: options.method || 'GET',
       url: url,
       data: options.body,
-      headers: {
-        ...options.headers,
-      },
+      headers: headers,
     };
 
     const response = await axiosInstance.request(axiosConfig);
-
     return response.data;
   } catch (error: any) {
-    // Handle 404 gracefully
-    if (error.response?.status === 404) {
-      console.warn(`API endpoint not found: ${endpoint}`);
-      return null as T;
-    }
+      const errorMessage =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        'Request failed';
 
-    // Handle 401 gracefully
-    if (error.response?.status === 401) {
-      console.warn(`Authentication required for: ${endpoint}`);
-      return null as T;
+      throw new Error(errorMessage);
     }
-
-    // Handle other errors
-    const errorMessage = error.response?.data?.error || 
-                        error.response?.data?.message || 
-                        error.message || 
-                        'Request failed';
-    
-    throw new Error(errorMessage);
   }
-}
-
   public async downloadFile(
     endpoint: string,
     options: RequestInit = {}
@@ -1288,10 +1286,26 @@ async getMyStore() {
     return this.request<{ products: any[]; total: number; limit: number; offset: number; store_customer_type: string }>(`/api/store/wholesale?${queryParams.toString()}`);
   }
 
-  async purchaseFromWholesale(productId: string, quantity: number, couponCode?: string, addressId?: string) {
-    return this.request('/api/store/wholesale/purchase', {
-      method: 'POST',
-      body: JSON.stringify({ product_id: productId, quantity, coupon_code: couponCode, address_id: addressId }),
+  async purchaseFromWholesale(
+    productId: string,
+    quantity: number,
+    couponCode?: string,
+    addressId?: string
+  ) {
+    const payload: PurchaseRequest = {
+      items: [
+        {
+          product_id: productId,
+          quantity,
+        },
+      ],
+      coupon_code: couponCode,
+      address_id: addressId,
+    };
+
+    return this.request("/api/store/wholesale/purchase", {
+      method: "POST",
+      body: JSON.stringify(payload),
     });
   }
 
@@ -1368,6 +1382,30 @@ async getMyStore() {
 
   async getMyResellerApplication() {
     return this.request('/api/reseller-applications/my-application');
+  }
+
+  async getResellerApplications(params?: { status?: string; page?: number; per_page?: number }) {
+    const queryParams = new URLSearchParams();
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
+    
+    const queryString = queryParams.toString();
+    return this.request(`/api/admin/resellers${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async approveResellerApplication(applicationId: string, adminComments?: string) {
+    return this.request(`/api/admin/resellers/${applicationId}/approve`, {
+      method: 'PUT',
+      body: JSON.stringify({ admin_comments: adminComments }),
+    });
+  }
+
+  async rejectResellerApplication(applicationId: string, rejectionReason: string) {
+    return this.request(`/api/admin/resellers/${applicationId}/reject`, {
+      method: 'PUT',
+      body: JSON.stringify({ rejection_reason: rejectionReason }),
+    });
   }
 
   // Cart endpoints

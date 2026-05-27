@@ -26,6 +26,50 @@ export interface Store {
   user?: User;
 }
 
+// BACKEND DTO (what Flask expects)
+export interface StoreCreateDTO {
+  name: string;
+  description: string;
+  username: string;
+  email: string;
+
+  phone?: string | null;
+
+  address_line1: string;
+  address_line2?: string | null;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+
+  business_hours?: Record<string, any> | null;
+  social_media?: Record<string, any> | null;
+  return_policy?: Record<string, any> | null;
+  shipping_policy?: Record<string, any> | null;
+}
+
+// FRONTEND FORM MODEL (UI state)
+export interface StoreFormValues {
+  storeName: string;
+  storeDescription: string;
+  username: string;
+  email: string;
+
+  phone?: string;
+
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+
+  businessHours?: any;
+  socialMedia?: any;
+  returnPolicy?: any;
+  shippingPolicy?: any;
+}
+
 export interface Rating {
   id: string;
   rating: number;

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { logUserAction, type UserAction } from '@/lib/services/userActionLog';
+import { logUserAction } from '@/lib/services/userActionLog';
 
 const FLASK_BACKEND_URL = process.env.FLASK_BACKEND_URL || 'http://127.0.0.1:5000';
 const USE_MOCK_DATA = process.env.USE_MOCK_AUTH === 'true';
@@ -18,7 +18,6 @@ export async function POST(request: Request) {
       );
     }
 
-    console.log('[Login API] Attempting login:', { email, passwordLength: password?.length, useMock: USE_MOCK_DATA });
 
     // Use mock data if enabled or if backend is unavailable
     if (USE_MOCK_DATA) {
@@ -65,8 +64,6 @@ export async function POST(request: Request) {
     }
 
     // Real backend login
-    console.log('[Login API] Attempting login with Flask backend:', { email, passwordLength: password?.length });
-
     const flaskResponse = await fetch(`${FLASK_BACKEND_URL}/api/auth/login`, {
       method: 'POST',
       headers: {

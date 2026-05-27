@@ -79,8 +79,10 @@ export default function WholesaleStorePage() {
       if (response?.addresses && response.addresses.length > 0) {
         setSelectedAddressId(response.addresses[0].id);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching addresses:', error);
+      const errorMessage = error?.response?.data?.error || error?.message || 'Unable to load addresses. Please try again.'
+      toast.error(errorMessage)
     }
   };
 
@@ -91,8 +93,10 @@ export default function WholesaleStorePage() {
         if (response?.store) {
           setStoreData(response.store);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching store data:', error);
+        const errorMessage = error?.response?.data?.error || error?.message || 'Unable to load store information. Please try again.'
+        toast.error(errorMessage)
       }
     }
   };
@@ -110,9 +114,10 @@ export default function WholesaleStorePage() {
         search: searchQuery || undefined
       });
       setProducts(response?.products || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching products:', error);
-      toast.error('Failed to load catalog');
+      const errorMessage = error?.response?.data?.error || error?.message || 'Unable to load catalog. Please try again.'
+      toast.error(errorMessage)
       setProducts([]);
     } finally {
       setLoading(false);

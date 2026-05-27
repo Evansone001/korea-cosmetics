@@ -1,10 +1,11 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useAppSelector } from '@/lib/hooks'
-import { PackageIcon, DollarSignIcon, ShoppingCartIcon, UsersIcon, Store, Clock, AlertCircle, ArrowRight, Bell, Loader2 } from 'lucide-react'
+import { PackageIcon, DollarSignIcon, ShoppingCartIcon, UsersIcon, Store, Clock, AlertCircle, ArrowRight, Bell, Loader2, MessageSquare } from 'lucide-react'
 import { apiClient, OrderStatsResponse, CustomerStatsResponse, DashboardMetricsResponse } from '@/lib/api-client'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import AdminComments from '@/components/store/AdminComments'
 
 interface StoreData {
     id: string
@@ -94,7 +95,7 @@ export default function StoreDashboard() {
                 status: error?.response?.status
             })
             setStore(null)
-            setStoreError(error?.response?.data?.error || error?.message || 'Error checking store status')
+            setStoreError(error?.response?.data?.error || error?.message || 'Unable to load store information. Please try again.')
         } finally {
             setStoreLoading(false)
             setLoading(false)
@@ -139,7 +140,7 @@ export default function StoreDashboard() {
             fetchNotifications(storeData.id)
         } catch (error) {
             console.error('Failed to fetch dashboard data:', error)
-            toast.error('Failed to load dashboard data')
+            toast.error('Unable to load dashboard data. Please try again.')
         } finally {
             setLoading(false)
         }
@@ -175,7 +176,7 @@ export default function StoreDashboard() {
             setUnreadCount(allNotifications.filter((n: any) => !n.read).length || 0)
         } catch (error) {
             console.error('Failed to fetch notifications:', error)
-            toast.error('Failed to load notifications')
+            toast.error('Unable to load notifications. Please try again.')
         }
     }
 
@@ -196,7 +197,7 @@ export default function StoreDashboard() {
             fetchNotifications(store.id)
         } catch (error) {
             console.error('Failed to mark notification as read:', error)
-            toast.error('Failed to mark notification as read')
+            toast.error('Unable to mark notification as read. Please try again.')
         }
     }
 
@@ -225,7 +226,7 @@ export default function StoreDashboard() {
             
         } catch (error: any) {
             console.error('Failed to load store products:', error)
-            const errorMessage = error?.response?.data?.error || error?.message || 'Failed to load products'
+            const errorMessage = error?.response?.data?.error || error?.message || 'Unable to load products. Please try again.'
             toast.error(errorMessage)
         } finally {
             setProductsLoading(false)
@@ -235,7 +236,7 @@ export default function StoreDashboard() {
     const handleBulkVisibilityAction = async (action: string) => {
         try {
             if (!store?.id) {
-                toast.error('Store not found')
+                toast.error('Please create a store first to manage product visibility')
                 return
             }
 
@@ -255,7 +256,7 @@ export default function StoreDashboard() {
             
         } catch (error: any) {
             console.error('Failed to perform bulk action:', error)
-            const errorMessage = error?.response?.data?.error || error?.message || `Failed to ${action.toLowerCase()} products`
+            const errorMessage = error?.response?.data?.error || error?.message || `Unable to ${action.toLowerCase()} products. Please try again.`
             toast.error(errorMessage)
         }
     }
@@ -263,7 +264,7 @@ export default function StoreDashboard() {
     const handleVisibilitySettingChange = async (setting: string, value: boolean) => {
         try {
             if (!store?.id) {
-                toast.error('Store not found')
+                toast.error('Please create a store first to manage visibility settings')
                 return
             }
 
@@ -298,7 +299,7 @@ export default function StoreDashboard() {
             
         } catch (error: any) {
             console.error('Failed to update visibility setting:', error)
-            const errorMessage = error?.response?.data?.error || error?.message || 'Failed to update setting'
+            const errorMessage = error?.response?.data?.error || error?.message || 'Unable to update visibility setting. Please try again.'
             toast.error(errorMessage)
         }
     }
@@ -404,7 +405,7 @@ export default function StoreDashboard() {
     const handleFulfillmentAction = async (action: string) => {
         try {
             if (!store?.id) {
-                toast.error('Store not found')
+                toast.error('Please create a store first to manage fulfillment settings')
                 return
             }
 
@@ -468,13 +469,13 @@ export default function StoreDashboard() {
                     break
                     
                 default:
-                    toast.error('Unknown fulfillment action')
+                    toast.error('This action is not available. Please contact support.')
             }
             
             checkStoreStatus() // Refresh store data
         } catch (error: any) {
             console.error('Failed to perform fulfillment action:', error)
-            const errorMessage = error?.response?.data?.error || error?.message || `Failed to ${action.replace('-', ' ')}`
+            const errorMessage = error?.response?.data?.error || error?.message || `Unable to complete this action. Please try again.`
             toast.error(errorMessage)
         } finally {
             setFulfillmentLoading(null)
@@ -581,90 +582,16 @@ export default function StoreDashboard() {
                             <span className="text-amber-700 font-medium text-sm">{lowStockAlerts} items low on stock</span>
                         </div>
                     )}
-                    <div className="relative">
-                        <button
-                            onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
-                            className="relative p-1.5 sm:p-2 rounded-lg hover:bg-slate-100 transition-colors"
-                        >
-                            <Bell size={22} className="text-slate-600" />
-                            {unreadCount > 0 && (
-                                <span className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 bg-red-500 text-white text-[10px] sm:text-xs w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center rounded-full">
-                                    {unreadCount > 9 ? '9+' : unreadCount}
-                                </span>
-                            )}
-                        </button>
-                        {showNotificationDropdown && (
-                            <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] sm:w-96 bg-white rounded-xl shadow-lg border border-slate-200 z-50">
-                                <div className="p-4 border-b border-slate-200">
-                                    <h3 className="font-semibold text-slate-900">Notifications</h3>
-                                </div>
-                                <div className="max-h-96 overflow-y-auto">
-                                    {notifications.length === 0 ? (
-                                        <div className="p-8 text-center text-slate-500">
-                                            No notifications
-                                        </div>
-                                    ) : (
-                                        notifications.slice(0, 10).map((notification) => (
-                                            <div
-                                                key={notification.id}
-                                                className={`p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors ${
-                                                    !notification.read ? 'bg-blue-50' : ''
-                                                }`}
-                                                onClick={() => {
-                                                    if (!notification.read) {
-                                                        handleMarkAsRead(notification.id, notification.type)
-                                                    }
-                                                    setShowNotificationDropdown(false)
-                                                }}
-                                            >
-                                                <div className="flex items-start gap-3">
-                                                    <div className={`p-2 rounded-lg ${
-                                                        notification.type === 'store' || notification.type === 'status_change'
-                                                            ? 'bg-green-100 text-green-600'
-                                                            : notification.type === 'product' || notification.type === 'approved'
-                                                            ? 'bg-blue-100 text-blue-600'
-                                                            : notification.type === 'rejected'
-                                                            ? 'bg-red-100 text-red-600'
-                                                            : 'bg-blue-100 text-blue-600'
-                                                    }`}>
-                                                        {notification.type === 'store' || notification.type === 'status_change' ? (
-                                                            <Store size={16} />
-                                                        ) : notification.type === 'product' || notification.type === 'approved' ? (
-                                                            <PackageIcon size={16} />
-                                                        ) : notification.type === 'rejected' ? (
-                                                            <AlertCircle size={16} />
-                                                        ) : (
-                                                            <Bell size={16} />
-                                                        )}
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-sm text-slate-900 line-clamp-2">{notification.message}</p>
-                                                        <p className="text-xs text-slate-500 mt-1">
-                                                            {new Date(notification.created_at || notification.createdAt).toLocaleString()}
-                                                        </p>
-                                                    </div>
-                                                    {!notification.read && (
-                                                        <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                                {notifications.length > 10 && (
-                                    <div className="p-3 border-t border-slate-200 text-center">
-                                        <button
-                                            onClick={() => setShowNotificationDropdown(false)}
-                                            className="text-sm text-pink-600 hover:text-pink-700 font-medium"
-                                        >
-                                            View all notifications
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
                 </div>
+            </div>
+
+            {/* Admin Comments Section */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h2 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-pink-600" />
+                    Admin Feedback & Comments
+                </h2>
+                <AdminComments storeId={store?.id} />
             </div>
 
             {/* Stats Grid */}
@@ -684,69 +611,6 @@ export default function StoreDashboard() {
                     </div>
                 ))}
             </div>
-
-            {/* Notifications */}
-            {notifications.length > 0 && (
-                <div className="bg-white rounded-xl shadow-sm border border-pink-100 p-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-lg font-semibold text-slate-900">
-                            Notifications
-                            {unreadCount > 0 && (
-                                <span className="ml-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
-                                    {unreadCount}
-                                </span>
-                            )}
-                        </h2>
-                    </div>
-                    <div className="space-y-3 max-h-64 overflow-y-auto">
-                        {notifications.slice(0, 5).map((notification) => (
-                            <div
-                                key={notification.id}
-                                className={`p-4 rounded-xl border transition-colors cursor-pointer ${
-                                    !notification.read
-                                        ? 'bg-blue-50 border-blue-200'
-                                        : 'bg-slate-50 border-slate-200'
-                                }`}
-                                onClick={() => !notification.read && handleMarkAsRead(notification.id, notification.type)}
-                            >
-                                <div className="flex items-start gap-3">
-                                    <div className={`p-2 rounded-lg ${
-                                        notification.type === 'store' || notification.type === 'status_change'
-                                            ? 'bg-green-100 text-green-600'
-                                            : notification.type === 'product' || notification.type === 'approved'
-                                            ? 'bg-blue-100 text-blue-600'
-                                            : notification.type === 'rejected'
-                                            ? 'bg-red-100 text-red-600'
-                                            : 'bg-blue-100 text-blue-600'
-                                    }`}>
-                                        {notification.type === 'store' || notification.type === 'status_change' ? (
-                                            <Store size={16} />
-                                        ) : notification.type === 'product' || notification.type === 'approved' ? (
-                                            <PackageIcon size={16} />
-                                        ) : notification.type === 'rejected' ? (
-                                            <AlertCircle size={16} />
-                                        ) : (
-                                            <Bell size={16} />
-                                        )}
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className="text-sm text-slate-900">{notification.message}</p>
-                                        {notification.rejection_reason && (
-                                            <p className="text-xs text-slate-600 mt-1">{notification.rejection_reason}</p>
-                                        )}
-                                        <p className="text-xs text-slate-500 mt-2">
-                                            {new Date(notification.created_at || notification.createdAt).toLocaleString()}
-                                        </p>
-                                    </div>
-                                    {!notification.read && (
-                                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
 
             {/* Recent Activity */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1027,11 +891,11 @@ export default function StoreDashboard() {
                                     </span>
                                     <div className="flex items-center gap-2">
                                         <span className={`text-xs px-2 py-1 rounded-full ${
-                                            product.stock > 0 
+                                            product.stock_quantity > 0 
                                                 ? 'bg-green-100 text-green-700' 
                                                 : 'bg-red-100 text-red-700'
                                         }`}>
-                                            {product.stock > 0 ? `In Stock (${product.stock})` : 'Out of Stock'}
+                                            {product.stock_quantity > 0 ? `In Stock (${product.stock_quantity})` : 'Out of Stock'}
                                         </span>
                                         <span className={`text-xs px-2 py-1 rounded-full ${
                                             product.visibility_status === 'ACTIVE' 

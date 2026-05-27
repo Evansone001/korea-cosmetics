@@ -30,6 +30,7 @@ interface InventoryItem {
 }
 
 interface PublicProduct {
+  stock_quantity: number;
   id: string;
   name: string;
   price: number;
@@ -275,7 +276,7 @@ export default function InventorySyncPage() {
                       Price: <strong>${product.price.toFixed(2)}</strong>
                     </span>
                     <span className="text-slate-600">
-                      Stock: <strong>{product.stock}</strong>
+                      Stock: <strong>{product.stock_quantity || 0}</strong>
                     </span>
                     <span className="text-slate-400">
                       ID: {product.id}
