@@ -8,7 +8,7 @@ import type { Product } from "@/types";
 
 export default function Product() {
 
-    const { productId } = useParams();
+    const { slug } = useParams();
     const searchParams = useSearchParams();
     const type = (searchParams.get('type') as 'retail' | 'b2b') || 'retail'; // Default to retail
 
@@ -19,7 +19,7 @@ export default function Product() {
         setLoading(true);
         try {
             // Fetch product from backend API
-            const response = await apiClient.getProduct(productId as string) as { product: {
+            const response = await apiClient.getProduct(slug as string) as { product: {
                 id: string;
                 name: string;
                 description: string;
@@ -46,6 +46,7 @@ export default function Product() {
 
                 const backendProduct: Product = {
                     id: response.product.id,
+                    slug: (response.product as any).slug,
                     name: response.product.name,
                     description: response.product.description,
                     price: response.product.price || 0,
@@ -74,7 +75,7 @@ export default function Product() {
     useEffect(() => {
         fetchProduct();
         scrollTo(0, 0)
-    }, [productId]);
+    }, [slug]);
 
     if (loading) {
         return (

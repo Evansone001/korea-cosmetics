@@ -415,7 +415,7 @@ const ProductDescription = ({ product }: ProductDescriptionProps) => {
                         {relatedProducts.slice(0, 4).map((item) => (
                             <Link 
                                 key={item.id} 
-                                href={`/product/${item.id}`}
+                                href={`/product/${(item as any).slug ?? item.id}`}
                                 className="group bg-slate-50 rounded-xl p-4 hover:bg-pink-50 transition-colors"
                             >
                                 <div className="aspect-square bg-white rounded-lg mb-3 flex items-center justify-center">
@@ -459,7 +459,7 @@ const ProductDescription = ({ product }: ProductDescriptionProps) => {
                         {relatedProducts.slice(0, 3).map((item) => (
                             <Link 
                                 key={`recent-${item.id}`} 
-                                href={`/product/${item.id}`}
+                                href={`/product/${(item as any).slug ?? item.id}`}
                                 className="flex-shrink-0 w-40 bg-white rounded-xl p-3 border border-slate-200 hover:border-pink-300 transition-colors"
                             >
                                 <div className="aspect-square bg-slate-100 rounded-lg mb-2 flex items-center justify-center">

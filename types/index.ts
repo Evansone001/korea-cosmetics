@@ -90,6 +90,7 @@ export interface Rating {
 
 export interface Product {
   id: string;
+  slug?: string;
   name: string;
   description: string;
   mrp: number;

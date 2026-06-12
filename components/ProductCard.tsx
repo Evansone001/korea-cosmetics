@@ -35,7 +35,7 @@ const ProductCard = ({ product }: ProductCardProps) => {
     return (
         <div className='group bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-slate-100 flex flex-col h-full'>
             {/* Image Section */}
-            <Link href={`/product/${product.id}`} className='relative block'>
+            <Link href={`/product/${product.slug ?? product.id}`} className='relative block'>
                 {badge && (
                     <div className='absolute top-3 left-3 z-10 flex flex-col gap-2'>
                         <span className={`bg-gradient-to-r ${badge.class} text-white text-xs px-3 py-1 rounded-full font-medium shadow-sm`}>
@@ -84,7 +84,7 @@ const ProductCard = ({ product }: ProductCardProps) => {
                 )}
 
                 {/* Product Name */}
-                <Link href={`/product/${product.id}`}>
+                <Link href={`/product/${product.slug ?? product.id}`}>
                     <h3 className='text-sm font-semibold text-slate-900 line-clamp-2 hover:text-pink-600 transition-colors mb-2'>
                         {product.name}
                     </h3>
@@ -151,7 +151,7 @@ const ProductCard = ({ product }: ProductCardProps) => {
                 {/* Action Buttons */}
                 <div className='flex gap-2 mt-auto'>
                     <Link
-                        href={`/product/${product.id}`}
+                        href={`/product/${product.slug ?? product.id}`}
                         className='flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white py-2.5 rounded-lg hover:from-pink-600 hover:to-rose-600 transition-all text-xs font-semibold text-center flex items-center justify-center gap-1 shadow-sm hover:shadow-md'
                     >
                         <ShoppingBagIcon size={14} />

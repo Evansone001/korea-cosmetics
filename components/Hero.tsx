@@ -245,7 +245,7 @@ const Hero = () => {
                 ) : (
                     <div className='grid md:grid-cols-2 lg:grid-cols-3 gap-8'>
                         {featuredProducts.map((product) => (
-                        <Link key={product.id} href={`/product/${product.id}`} className='group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden block'>
+                        <Link key={product.id} href={`/product/${(product as any).slug ?? product.id}`} className='group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden block'>
                             <div className='relative'>
                                 <div className='absolute top-4 left-4 z-10'>
                                     <span className='bg-gradient-to-r from-pink-500 to-rose-500 text-white text-xs px-3 py-1 rounded-full font-medium'>
@@ -297,7 +297,7 @@ const Hero = () => {
                                 </div>
 
                                 <div className='flex gap-2'>
-                                    <button onClick={() => window.location.href = `/product/${product.id}`} className='flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white py-2 rounded-lg hover:from-pink-600 hover:to-rose-600 transition-colors text-sm font-medium'>
+                                    <button onClick={() => window.location.href = `/product/${(product as any).slug ?? product.id}`} className='flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white py-2 rounded-lg hover:from-pink-600 hover:to-rose-600 transition-colors text-sm font-medium'>
                                         Buy Now
                                     </button>
                                 </div>
