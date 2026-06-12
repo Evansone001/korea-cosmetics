@@ -161,7 +161,7 @@ const AdminSidebar = () => {
                 </button>
 
                 {/* Navigation */}
-                <nav className="flex-1 p-4 space-y-1">
+                <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
                     {sidebarLinks.map((link, index) => {
                         const isActive = pathname === link.href
                         return (
