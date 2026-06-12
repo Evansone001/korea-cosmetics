@@ -197,7 +197,7 @@ export default function ProductCatalogPage() {
       if (newCategoryParentId) {
         categoryData.parent_id = newCategoryParentId;
       }
-      await apiClient.createCategory(categoryData);
+      await apiClient.createCategory(categoryData.name, categoryData.parent_id);
       toast.success('Category added successfully');
       setNewCategoryName('');
       setNewCategoryParentId('');
