@@ -7,6 +7,12 @@ import { useEffect, useState, useRef } from "react"
 import { useAppDispatch, useAppSelector } from "@/lib/hooks"
 import { logout } from "@/lib/features/auth/authSlice"
 import { assets } from "@/assets/assets"
+import axiosInstance from "@/lib/axios"
+
+const getAuthToken = () =>
+  typeof document !== 'undefined'
+    ? document.cookie.split(';').find(c => c.trim().startsWith('auth-token='))?.split('=')[1] ?? null
+    : null
 
 interface UserNotification {
   id: string
@@ -84,29 +90,26 @@ const AdminNavbar = () => {
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const fetchPendingCounts = async () => {
+    if (!getAuthToken()) return
     try {
-      const res = await fetch('/api/admin/pending-counts', { credentials: 'include' })
-      if (res.ok) setPendingCounts(await res.json())
+      const { data } = await axiosInstance.get('/api/admin/resellers/pending-counts')
+      setPendingCounts(data)
     } catch { /* silent */ }
   }
 
   const fetchNotifications = async () => {
+    if (!getAuthToken()) return
     try {
-      const res = await fetch('/api/user/notifications?limit=20&unread_only=false', { credentials: 'include' })
-      if (res.ok) {
-        const data = await res.json()
-        setNotifications(data.notifications || [])
-      }
+      const { data } = await axiosInstance.get('/api/user/notifications?limit=20&unread_only=false')
+      setNotifications(data.notifications || [])
     } catch { /* silent */ }
   }
 
   const fetchUnreadCount = async () => {
+    if (!getAuthToken()) return
     try {
-      const res = await fetch('/api/user/notifications/unread-count', { credentials: 'include' })
-      if (res.ok) {
-        const data = await res.json()
-        setUnreadNotifCount(data.unread_count ?? 0)
-      }
+      const { data } = await axiosInstance.get('/api/user/notifications/unread-count')
+      setUnreadNotifCount(data.unread_count ?? 0)
     } catch { /* silent */ }
   }
 
