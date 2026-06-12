@@ -15,13 +15,13 @@ export async function GET() {
     }
 }
 
-// PUT /api/admin/master/alerts/[id]/acknowledge - Acknowledge alert
+// PUT /api/admin/master/alerts/acknowledge - Acknowledge alert
 export async function PUT(
-    request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    request: NextRequest
 ) {
     try {
-        const { id } = await params
+        const body = await request.json().catch(() => ({}))
+        const id = body.id || body.alertId
         const userId = request.headers.get('X-User-Id') || 'unknown'
         
         await masterAdminService.acknowledgeAlert(id, userId)

@@ -19,8 +19,8 @@ import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 
 interface StoreProduct {
-  id: string;
-  product_id: string;
+  id: string;           // StoreProduct.id (join-table PK)
+  product_id: string;   // catalog Product.id (for links)
   name: string;
   product_name: string;
   description: string;
@@ -38,6 +38,8 @@ interface StoreProduct {
   reorder_level?: number;
   status: 'draft' | 'pending' | 'active' | 'inactive' | 'archived';
   in_stock?: boolean;
+  purchased_from_warehouse?: boolean;
+  purchase_order_id?: string;
   createdAt: string;
   updated_at?: string;
 }
@@ -67,8 +69,8 @@ export default function ManageProductPage() {
   const fetchStoreProducts = async () => {
     try {
       const response = await apiClient.getInventory({ limit: 100 });
-      const mappedProducts: StoreProduct[] = (response.inventory || []).map(p => ({
-        id: p.product_id,
+      const mappedProducts: StoreProduct[] = (response.inventory || []).map((p: any) => ({
+        id: p.id,
         product_id: p.product_id,
         name: p.store_product_name || p.product_name || 'Unknown',
         product_name: p.product_name || 'Unknown',
@@ -82,11 +84,13 @@ export default function ManageProductPage() {
         images: p.product_image ? [p.product_image] : [],
         product_image: p.product_image,
         stock_quantity: p.stock_quantity || 0,
-        purchased_quantity: 0,
-        sold_quantity: 0,
+        purchased_quantity: p.purchased_quantity || 0,
+        sold_quantity: p.sold_quantity || 0,
         reorder_level: p.reorder_level || 5,
-        status: 'active',
+        status: (p.status as any) || 'active',
         in_stock: p.stock_quantity > 0,
+        purchased_from_warehouse: p.purchased_from_warehouse || false,
+        purchase_order_id: p.purchase_order_id || null,
         createdAt: p.updated_at || new Date().toISOString(),
         updated_at: p.updated_at,
       }));
@@ -100,13 +104,13 @@ export default function ManageProductPage() {
     }
   };
 
-  const handleDeleteProduct = async (productId: string) => {
+  const handleDeleteProduct = async (storeProductId: string) => {
     if (!confirm('Are you sure you want to remove this product from your store?')) return;
 
     try {
-      await apiClient.deleteProduct(productId);
+      await apiClient.removeStoreProduct(storeProductId);
       toast.success('Product removed from store');
-      setProducts(prev => prev.filter(p => p.id !== productId));
+      setProducts(prev => prev.filter(p => p.id !== storeProductId));
     } catch (error) {
       console.error('Failed to delete product:', error);
       toast.error('Failed to remove product');
@@ -338,7 +342,12 @@ export default function ManageProductPage() {
                         )}
                       </div>
                       <div>
-                        <p className="font-medium text-slate-900 line-clamp-1">{product.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-slate-900 line-clamp-1">{product.name}</p>
+                          {product.purchased_from_warehouse && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 flex-shrink-0" title={`From warehouse purchase ${product.purchase_order_id || ''}`}>WH</span>
+                          )}
+                        </div>
                         <p className="text-sm text-slate-500">{product.brand}</p>
                       </div>
                     </div>
@@ -352,26 +361,39 @@ export default function ManageProductPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => adjustStock(product.id, -1)}
-                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                        disabled={product.stock_quantity === 0}
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <span className={`text-sm font-medium w-12 text-center ${
-                        product.stock_quantity === 0 ? 'text-red-600' :
-                        product.stock_quantity < (product.reorder_level || 5) ? 'text-amber-600' : 'text-green-600'
-                      }`}>
-                        {product.stock_quantity}
-                      </span>
-                      <button
-                        onClick={() => adjustStock(product.id, 1)}
-                        className="p-1 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
-                      >
-                        <Plus size={14} />
-                      </button>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => adjustStock(product.id, -1)}
+                          className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          disabled={product.stock_quantity === 0}
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span className={`text-sm font-medium w-12 text-center ${
+                          product.stock_quantity === 0 ? 'text-red-600' :
+                          product.stock_quantity < (product.reorder_level || 5) ? 'text-amber-600' : 'text-green-600'
+                        }`}>
+                          {product.stock_quantity}
+                        </span>
+                        <button
+                          onClick={() => adjustStock(product.id, 1)}
+                          className="p-1 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                          disabled={
+                            product.purchased_from_warehouse
+                              ? product.stock_quantity >= (product.purchased_quantity || 0) - (product.sold_quantity || 0)
+                              : false
+                          }
+                          title={product.purchased_from_warehouse ? `Max: ${(product.purchased_quantity || 0) - (product.sold_quantity || 0)} units` : undefined}
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                      {product.purchased_from_warehouse && (
+                        <p className="text-[10px] text-slate-400 leading-none">
+                          Max: {(product.purchased_quantity || 0) - (product.sold_quantity || 0)}
+                        </p>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -387,7 +409,7 @@ export default function ManageProductPage() {
                         <Edit2 size={18} />
                       </button>
                       <Link
-                        href={`/product/${product.id}`}
+                        href={`/product/${product.product_id}`}
                         target="_blank"
                         className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         title="View Product"

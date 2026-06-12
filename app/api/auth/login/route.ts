@@ -138,8 +138,8 @@ export async function POST(request: Request) {
     });
     
     const cookieOptions: any = {
-      httpOnly: true,
-      secure: isSecure, // TRUE when served over HTTPS
+      httpOnly: false,
+      secure: isSecure,
       sameSite: 'lax',
       expires: expires,
       path: '/',
@@ -153,7 +153,7 @@ export async function POST(request: Request) {
     // Set refresh token cookie if provided
     if (refreshToken) {
       const refreshCookieOptions: any = {
-        httpOnly: true,
+        httpOnly: false,
         secure: isSecure,
         sameSite: 'lax',
         expires: expires,

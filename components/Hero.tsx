@@ -7,10 +7,13 @@ import Link from 'next/link'
 import { useAppDispatch, useAppSelector } from '@/lib/hooks'
 import { addToCart } from '@/lib/features/cart/cartSlice'
 import toast from 'react-hot-toast'
+import { useRouter } from 'next/navigation'
+import { apiClient } from '@/lib/api-client'
 
 const Hero = () => {
     const currency = "KShs"
     const dispatch = useAppDispatch()
+    const router = useRouter()
     const { user } = useAppSelector(state => state?.auth || { user: null })
     const [featuredProducts, setFeaturedProducts] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
@@ -27,12 +30,47 @@ const Hero = () => {
         }
 
         if (user.role === 'seller') {
-            // Redirect to seller dashboard wholesale category
             window.location.href = '/store/wholesale'
         } else {
-            // Direct link to apply as seller page for authenticated customers
             window.location.href = '/apply-reseller'
         }
+    }
+
+    const handleApplySellerClick = async (e: React.MouseEvent) => {
+        e.preventDefault()
+        if (!user) {
+            router.push('/seller-register')
+            return
+        }
+        // Sellers already have a store — go straight to dashboard
+        if (user.role === 'seller' || user.role === 'admin' || user.role === 'super_admin') {
+            router.push('/store')
+            return
+        }
+        try {
+            const response: any = await apiClient.getMyResellerApplication()
+            if (response.application) {
+                if (response.application.status === 'approved') {
+                    // Approved — check if store already created
+                    try {
+                        const storeRes: any = await apiClient.getMyStore()
+                        if (storeRes?.store) {
+                            router.push('/store')
+                        } else {
+                            router.push('/create-store')
+                        }
+                    } catch {
+                        router.push('/create-store')
+                    }
+                } else {
+                    router.push('/reseller-application-status')
+                }
+                return
+            }
+        } catch {
+            // No application — fall through to apply form
+        }
+        router.push('/apply-reseller')
     }
 
     // Fetch featured products from backend
@@ -143,9 +181,9 @@ const Hero = () => {
                                     Shop Products
                                     <ArrowRightIcon size={20} />
                                 </Link>
-                                <Link href={user ? '/apply-reseller' : '/seller-register'} className='inline-flex items-center gap-2 border border-pink-300 text-pink-700 px-8 py-4 rounded-lg hover:bg-pink-50 transition-colors font-medium'>
+                                <button onClick={handleApplySellerClick} className='inline-flex items-center gap-2 border border-pink-300 text-pink-700 px-8 py-4 rounded-lg hover:bg-pink-50 transition-colors font-medium'>
                                     {user ? 'Apply as Seller' : 'Become a Seller'}
-                                </Link>
+                                </button>
                                 <Link href="/wholesale" className='inline-flex items-center gap-2 border border-slate-300 text-slate-700 px-8 py-4 rounded-lg hover:bg-slate-50 transition-colors font-medium'>
                                     B2B Wholesale
                                 </Link>

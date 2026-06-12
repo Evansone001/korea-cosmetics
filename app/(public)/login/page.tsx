@@ -76,6 +76,10 @@ function LoginContent({ dispatch, redirect }: {
             if (response.ok && data.access_token) {
                 console.log('[Login] Login successful, dispatching setUser with role:', data.user?.role)
 
+                // Clear any stale auth cache so StoreProvider doesn't serve an old role
+                localStorage.removeItem('auth-user')
+                localStorage.removeItem('auth-timestamp')
+
                 // Store token in localStorage for API calls
                 localStorage.setItem('auth-token', data.access_token)
                 localStorage.setItem('refresh-token', data.refresh_token)
@@ -88,7 +92,7 @@ function LoginContent({ dispatch, redirect }: {
                 dispatch(setAuthenticated(true))
 
                 // Protected routes that should not be overridden by role-based redirects
-                const protectedRoutes = ['/checkout', '/cart', '/orders', '/profile']
+                const protectedRoutes = ['/checkout', '/cart', '/orders', '/profile', '/reseller-application-status', '/apply-reseller']
                 const isProtectedRoute = protectedRoutes.some(route => redirect.startsWith(route))
 
                 // Role-based redirect logic
@@ -97,27 +101,52 @@ function LoginContent({ dispatch, redirect }: {
                 // Only apply role-based redirects if not redirecting to a protected route
                 if (!isProtectedRoute) {
                     if (data.user?.role === 'admin' || data.user?.role === 'super_admin') {
-                        // Admin and super_admin users should go to admin dashboard unless redirecting to a non-dashboard page
                         if (redirect === '/' || redirect === '/store') {
                             finalRedirect = '/admin'
                         }
                     } else if (data.user?.role === 'seller') {
-                        // Seller users should go to seller dashboard unless redirecting to a non-dashboard page
                         if (redirect === '/' || redirect === '/admin') {
-                            finalRedirect = '/store'
+                            try {
+                                const resellerRes = await fetch('/api/reseller-applications/my-application', { credentials: 'include' })
+                                if (resellerRes.ok) {
+                                    const resellerData = await resellerRes.json()
+                                    if (resellerData.application?.status === 'approved') {
+                                        finalRedirect = '/store'
+                                    } else if (resellerData.application) {
+                                        finalRedirect = '/reseller-application-status'
+                                    } else {
+                                        finalRedirect = '/apply-reseller'
+                                    }
+                                } else {
+                                    finalRedirect = '/store'
+                                }
+                            } catch {
+                                finalRedirect = '/store'
+                            }
                         }
                     } else if (data.user?.role === 'customer') {
-                        // Customer users should go to orders if no specific redirect
                         if (redirect === '/') {
-                            finalRedirect = '/orders'
+                            // Check if customer has a reseller application in progress
+                            try {
+                                const resellerRes = await fetch('/api/reseller-applications/my-application', { credentials: 'include' })
+                                if (resellerRes.ok) {
+                                    const resellerData = await resellerRes.json()
+                                    if (resellerData.application) {
+                                        finalRedirect = '/reseller-application-status'
+                                    } else {
+                                        finalRedirect = '/orders'
+                                    }
+                                } else {
+                                    finalRedirect = '/orders'
+                                }
+                            } catch {
+                                finalRedirect = '/orders'
+                            }
                         }
                     }
                 }
 
                 console.log('[Login] Redux dispatch complete, redirecting to:', finalRedirect)
-
-                // Immediate redirect - no artificial delay needed
-                console.log('[Login] Executing router.push to:', finalRedirect)
                 router.push(finalRedirect)
             } else {
                 console.log('[Login] Login failed:', data.error)

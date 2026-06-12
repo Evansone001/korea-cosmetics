@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAppDispatch, useAppSelector } from '@/lib/hooks';
 import { updateQuantity as updateQuantityAction, removeFromCart as removeFromCartAction, clearCart } from '@/lib/features/wholesaleCart/wholesaleCartSlice';
 import { WholesaleCartItem } from '@/types';
@@ -23,6 +24,7 @@ import AddressModal from '@/components/AddressModal';
 
 export default function WholesaleCartPage() {
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const { user } = useAppSelector(state => state?.auth || { user: null });
   const { items: cartItems, totalItems: cartItemCount, subtotal: cartSubtotal } = useAppSelector(state => state?.wholesaleCart || { items: [], totalItems: 0, subtotal: 0 });
   const [discountCode, setDiscountCode] = useState('');
@@ -113,9 +115,9 @@ export default function WholesaleCartPage() {
         return;
       }
 
-      toast.success('B2B order placed successfully and inventory updated!');
-      setOrderSuccess(true);
+      toast.success('B2B order placed successfully!');
       dispatch(clearCart());
+      router.push('/store/wholesale/orders');
     } catch (error) {
       toast.error('Failed to place order');
     } finally {

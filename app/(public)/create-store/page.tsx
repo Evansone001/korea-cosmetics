@@ -1,6 +1,7 @@
 'use client'
 import { assets } from "@/assets/assets"
 import { useEffect, useState, FormEvent, ChangeEvent } from "react"
+import { useAppSelector } from '@/lib/hooks'
 import Image from "next/image"
 import toast from "react-hot-toast"
 import Loading from "@/components/Loading"
@@ -28,6 +29,7 @@ interface StoreInfo {
 
 export default function CreateStore() {
     const router = useRouter()
+    const { isAuthenticated, authChecked } = useAppSelector(state => state?.auth || { isAuthenticated: false, authChecked: false })
     const [alreadySubmitted, setAlreadySubmitted] = useState(false)
     const [status, setStatus] = useState("")
     const [loading, setLoading] = useState(true)
@@ -112,42 +114,24 @@ export default function CreateStore() {
 
     const fetchSellerStatus = async () => {
         try {
-            // First check if user is authenticated
-            await apiClient.getCurrentUser()
-
-            // Check if user has approved reseller application
-            try {
-                const resellerResponse: any = await apiClient.getMyResellerApplication()
-                if (resellerResponse.application) {
-                    if (resellerResponse.application.status !== 'approved') {
-                        // User has pending or rejected reseller application
-                        setAlreadySubmitted(true)
-                        setStatus(resellerResponse.application.status)
-                        if (resellerResponse.application.status === 'pending') {
-                            setMessage("Your reseller application is pending approval. You can create a store after your application is approved.")
-                        } else if (resellerResponse.application.status === 'rejected') {
-                            setMessage(`Your reseller application was rejected. ${resellerResponse.application.rejection_reason || 'Please submit a new application.'}`)
-                        }
-                        setLoading(false)
-                        return
-                    }
-                    // Reseller application is approved, proceed to check store
+            // Check reseller application status for all users
+            const resellerResponse: any = await apiClient.getMyResellerApplication()
+            if (resellerResponse.application) {
+                if (resellerResponse.application.status !== 'approved') {
+                    // Pending or rejected — send to status page where they can refresh/reapply
+                    router.push('/reseller-application-status')
+                    return
                 }
-            } catch (resellerError: any) {
-                // No reseller application found - redirect to apply
-                if (!resellerError.message || !resellerError.message.includes('404')) {
-                    console.error('Error checking reseller application:', resellerError)
-                }
-                setAlreadySubmitted(true)
-                setStatus('no_reseller')
-                setMessage("You need to apply for reseller status before creating a store.")
-                setLoading(false)
+                // Approved — proceed to store check
+            } else {
+                // No application at all — redirect to apply
+                router.push('/apply-reseller')
                 return
             }
 
-            // Then check if store exists
+            // Then check if store exists (null means no store found — allow creation)
             const response: any = await apiClient.getMyStore()
-            if (response.store) {
+            if (response?.store) {
                 setAlreadySubmitted(true)
                 setStatus(response.store.status)
                 if (response.store.status === 'pending') {
@@ -321,8 +305,12 @@ export default function CreateStore() {
     }
 
     useEffect(() => {
-        fetchSellerStatus()
-    }, [])
+        if (authChecked && isAuthenticated) {
+            fetchSellerStatus()
+        } else if (authChecked && !isAuthenticated) {
+            router.push('/login?redirect=/create-store')
+        }
+    }, [authChecked, isAuthenticated])
 
     return !loading ? (
         <>

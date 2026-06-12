@@ -35,6 +35,7 @@ export default function AdminDashboard() {
     const [platformMetrics, setPlatformMetrics] = useState<PlatformMetrics | null>(null)
     const [healthScores, setHealthScores] = useState<StoreHealthScore[]>([])
     const [alerts, setAlerts] = useState<PlatformAlert[]>([])
+    const [dailyTrend, setDailyTrend] = useState<{ date: string; revenue: number; orders: number }[]>([])
 
     // Generate category distribution from real store data
     const categoryData = platformMetrics ? [
@@ -53,22 +54,26 @@ export default function AdminDashboard() {
         growth: store.trends.revenueChange || (Math.random() * 20 - 5)
     }))
 
+    const timeRangeDays: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30, '90d': 90 }
+
     useEffect(() => {
         const fetchData = async () => {
             try {
                 setLoading(true)
-                // Fetch only Master Admin data - single source of truth
-                const [storeData, metrics, health, alertData] = await Promise.all([
+                const days = timeRangeDays[timeRange] ?? 7
+                const [storeData, metrics, health, alertData, trendData] = await Promise.all([
                     masterAdminService.getAllStorePerformance(),
                     masterAdminService.getPlatformMetrics(),
                     masterAdminService.getStoreHealthScores(),
-                    masterAdminService.getPlatformAlerts()
+                    masterAdminService.getPlatformAlerts(),
+                    masterAdminService.getDailyTrend(days)
                 ])
-                
+
                 setStores(storeData)
                 setPlatformMetrics(metrics)
                 setHealthScores(health)
                 setAlerts(alertData)
+                setDailyTrend(trendData)
             } catch (error) {
                 console.error('Failed to fetch dashboard data:', error)
             } finally {
@@ -76,18 +81,10 @@ export default function AdminDashboard() {
             }
         }
         fetchData()
-    }, [])
+    }, [timeRange])
 
-    // Generate chart data from real platform metrics
-    const chartData = platformMetrics ? [
-        { date: '2025-01-20', revenue: Math.floor(platformMetrics.totalRevenue * 0.15), orders: Math.floor(platformMetrics.totalOrders * 0.12) },
-        { date: '2025-01-21', revenue: Math.floor(platformMetrics.totalRevenue * 0.18), orders: Math.floor(platformMetrics.totalOrders * 0.15) },
-        { date: '2025-01-22', revenue: Math.floor(platformMetrics.totalRevenue * 0.22), orders: Math.floor(platformMetrics.totalOrders * 0.20) },
-        { date: '2025-01-23', revenue: Math.floor(platformMetrics.totalRevenue * 0.25), orders: Math.floor(platformMetrics.totalOrders * 0.23) },
-        { date: '2025-01-24', revenue: Math.floor(platformMetrics.totalRevenue * 0.20), orders: Math.floor(platformMetrics.totalOrders * 0.18) },
-        { date: '2025-01-25', revenue: Math.floor(platformMetrics.totalRevenue * 0.28), orders: Math.floor(platformMetrics.totalOrders * 0.25) },
-        { date: '2025-01-26', revenue: Math.floor(platformMetrics.totalRevenue * 0.32), orders: Math.floor(platformMetrics.totalOrders * 0.30) },
-    ] : []
+    // Use real daily trend data from backend
+    const chartData = dailyTrend
 
     // AI Assistant State (for floating chatbot widget)
     const [chatOpen, setChatOpen] = useState(false)

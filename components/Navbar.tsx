@@ -19,39 +19,43 @@ const Navbar = () => {
     const [isDeliveryOpen, setIsDeliveryOpen] = useState(false)
     const [resellerStatus, setResellerStatus] = useState<'approved' | 'pending' | 'rejected' | 'none' | null>(null)
     const cartCount = useAppSelector(state => state.cart.total)
-    const { user, isAuthenticated } = useAppSelector(state => state?.auth || { user: null, isAuthenticated: false, isLoading: true })
+    const { user, isAuthenticated, authChecked } = useAppSelector(state => state?.auth || { user: null, isAuthenticated: false, isLoading: true, authChecked: false })
     const profileRef = useRef<HTMLDivElement>(null)
     const deliveryRef = useRef<HTMLDivElement>(null)
     const { cartPath } = useCartPath()
 
-    // Restore auth state from server on mount
+    // Restore auth state from server on mount — only if StoreProvider has finished its
+    // auth check, user is still not authenticated, AND there is actually an auth-token
+    // cookie present (avoids spurious 401 noise on startup for unauthenticated visitors).
     useEffect(() => {
+        if (!authChecked || isAuthenticated) return
+        const hasToken = typeof document !== 'undefined' &&
+            document.cookie.split(';').some(c => c.trim().startsWith('auth-token='))
+        if (!hasToken) return
+
         const restoreAuth = async () => {
-            if (!isAuthenticated) {
-                try {
-                    const response = await fetch('/api/auth/me', {
-                        credentials: 'include'
-                    })
-                    if (response.ok) {
-                        const data = await response.json()
-                        if (data.user) {
-                            // User is logged in, update Redux state
-                            dispatch(setUser(data.user))
-                            console.log('[Navbar] Restored user from /api/auth/me:', data.user.name)
-                        }
+            try {
+                const response = await fetch('/api/auth/me', {
+                    credentials: 'include'
+                })
+                if (response.ok) {
+                    const data = await response.json()
+                    if (data.user) {
+                        dispatch(setUser(data.user))
+                        console.log('[Navbar] Restored user from /api/auth/me:', data.user.name)
                     }
-                } catch (error) {
-                    console.error('[Navbar] Failed to restore auth:', error)
                 }
+            } catch (error) {
+                console.error('[Navbar] Failed to restore auth:', error)
             }
         }
         restoreAuth()
-    }, [isAuthenticated, dispatch])
+    }, [authChecked, isAuthenticated, dispatch])
 
     // Fetch reseller application status
     useEffect(() => {
         const fetchResellerStatus = async () => {
-            if (isAuthenticated && user?.role === 'customer') {
+            if (isAuthenticated && (user?.role === 'customer' || user?.role === 'seller')) {
                 try {
                     const response: any = await apiClient.getMyResellerApplication()
                     if (response.application) {
@@ -62,7 +66,7 @@ const Navbar = () => {
                 } catch (error) {
                     setResellerStatus('none')
                 }
-            } else if (user?.role === 'seller' || user?.role === 'admin') {
+            } else if (user?.role === 'admin' || user?.role === 'super_admin') {
                 setResellerStatus('approved')
             } else {
                 setResellerStatus(null)
@@ -286,19 +290,23 @@ const Navbar = () => {
                                                     Apply as Seller
                                                 </Link>
                                             )}
-                                            {(user?.role === 'seller' || user?.role === 'admin' || resellerStatus === 'approved') && (
-                                                <Link
-                                                    href="/store"
-                                                    className="block px-4 py-2 text-slate-700 hover:bg-gray-50 transition-colors"
-                                                    onClick={() => setIsProfileOpen(false)}
-                                                >
-                                                    Seller Dashboard
-                                                </Link>
+                                            {(user?.role === 'seller' || user?.role === 'admin' || user?.role === 'super_admin' || resellerStatus === 'approved') && (
+                                                resellerStatus === 'approved'
+                                                    ? <Link
+                                                        href="/store"
+                                                        className="block px-4 py-2 text-slate-700 hover:bg-gray-50 transition-colors"
+                                                        onClick={() => setIsProfileOpen(false)}
+                                                    >
+                                                        Seller Dashboard
+                                                    </Link>
+                                                    : <span className="block px-4 py-2 text-slate-400 cursor-not-allowed select-none" title="Available once your application is approved">
+                                                        Seller Dashboard
+                                                    </span>
                                             )}
-                                            {user?.role === 'customer' && resellerStatus === 'pending' && (
+                                            {(user?.role === 'customer' || user?.role === 'seller') && resellerStatus === 'pending' && (
                                                 <Link
                                                     href="/reseller-application-status"
-                                                    className="block px-4 py-2 text-slate-700 hover:bg-gray-50 transition-colors"
+                                                    className="block px-4 py-2 text-yellow-600 hover:bg-yellow-50 transition-colors"
                                                     onClick={() => setIsProfileOpen(false)}
                                                 >
                                                     View Application Status
@@ -458,19 +466,23 @@ const Navbar = () => {
                                                     Apply as Seller
                                                 </Link>
                                             )}
-                                            {(user?.role === 'seller' || user?.role === 'admin' || resellerStatus === 'approved') && (
-                                                <Link
-                                                    href="/store"
-                                                    className="block px-3 py-3 text-slate-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors"
-                                                    onClick={() => setIsMobileMenuOpen(false)}
-                                                >
-                                                    Seller Dashboard
-                                                </Link>
+                                            {(user?.role === 'seller' || user?.role === 'admin' || user?.role === 'super_admin' || resellerStatus === 'approved') && (
+                                                resellerStatus === 'approved'
+                                                    ? <Link
+                                                        href="/store"
+                                                        className="block px-3 py-3 text-slate-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors"
+                                                        onClick={() => setIsMobileMenuOpen(false)}
+                                                    >
+                                                        Seller Dashboard
+                                                    </Link>
+                                                    : <span className="block px-3 py-3 text-slate-400 cursor-not-allowed select-none rounded-lg" title="Available once your application is approved">
+                                                        Seller Dashboard
+                                                    </span>
                                             )}
-                                            {user?.role === 'customer' && resellerStatus === 'pending' && (
+                                            {(user?.role === 'customer' || user?.role === 'seller') && resellerStatus === 'pending' && (
                                                 <Link
                                                     href="/reseller-application-status"
-                                                    className="block px-3 py-3 text-slate-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors"
+                                                    className="block px-3 py-3 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors"
                                                     onClick={() => setIsMobileMenuOpen(false)}
                                                 >
                                                     View Application Status

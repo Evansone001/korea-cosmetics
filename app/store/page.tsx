@@ -20,6 +20,7 @@ interface StoreData {
 
 export default function StoreDashboard() {
     const products = useAppSelector(state => state.product.list)
+    const { isAuthenticated, authChecked } = useAppSelector(state => state?.auth || { isAuthenticated: false, authChecked: false })
     const [store, setStore] = useState<StoreData | null>(null)
     const [storeLoading, setStoreLoading] = useState(true)
     const [storeError, setStoreError] = useState<string | null>(null)
@@ -45,8 +46,10 @@ export default function StoreDashboard() {
     const [productsLoading, setProductsLoading] = useState(false)
 
     useEffect(() => {
-        checkStoreStatus()
-    }, [])
+        if (authChecked && isAuthenticated) {
+            checkStoreStatus()
+        }
+    }, [authChecked, isAuthenticated])
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {

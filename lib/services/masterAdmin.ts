@@ -4,15 +4,13 @@ import type {
     StoreHealthScore,
     PlatformAlert
 } from "@/lib/types/masterAdmin"
+import axiosInstance from "@/lib/axios"
 
 export const masterAdminService = {
     // ==================== STORE PERFORMANCE ====================
     async getAllStorePerformance(): Promise<StorePerformance[]> {
         try {
-            const response = await fetch('/api/admin/metrics/stores/performance', {
-                credentials: 'include',
-            })
-            const data = await response.json()
+            const { data } = await axiosInstance.get('/api/admin/metrics/stores/performance')
 
             if (!data || !data.stores || !Array.isArray(data.stores)) {
                 console.warn('Invalid response structure for store performance:', data)
@@ -31,33 +29,32 @@ export const masterAdminService = {
                         : 'pending',
                 location: `${store.city || ''}, ${store.country || ''}`,
                 metrics: {
-                    revenue: 0,
-                    orders: 0,
-                    customers: 0,
-                    products: 0,
-                    conversionRate: 0,
-                    avgOrderValue: 0,
-                    rating: 0,
-                    reviews: 0,
-                    revenueGrowth: 0,
-                    orderGrowth: 0,
-                    customerGrowth: 0
+                    revenue: store.revenue || 0,
+                    orders: store.orders || 0,
+                    customers: store.customers || 0,
+                    products: store.products || 0,
+                    conversionRate: store.conversion_rate || 0,
+                    avgOrderValue: store.orders > 0 ? (store.revenue || 0) / store.orders : 0,
+                    rating: store.rating || 0,
+                    reviews: store.reviews || 0,
+                    revenueGrowth: store.revenue_growth || 0,
+                    orderGrowth: store.order_growth || 0,
+                    customerGrowth: store.customer_growth || 0
                 },
                 trends: {
-                    revenueChange: 0,
-                    ordersChange: 0,
-                    isPositive: true,
-                    revenueGrowth: 0,
-                    orderGrowth: 0,
-                    customerGrowth: 0
+                    revenueChange: store.revenue_growth || 0,
+                    ordersChange: store.order_growth || 0,
+                    isPositive: (store.revenue_growth || 0) >= 0,
+                    revenueGrowth: store.revenue_growth || 0,
+                    orderGrowth: store.order_growth || 0,
+                    customerGrowth: store.customer_growth || 0
                 },
-                healthScore: 75,
+                healthScore: store.health_score || 75,
                 lastActivity: store.updated_at || store.created_at,
                 createdAt: store.created_at
             }))
         } catch (error) {
             console.error('Failed to fetch store performance data:', error)
-            await new Promise(resolve => setTimeout(resolve, 500))
             return mockStores
         }
     },
@@ -65,10 +62,7 @@ export const masterAdminService = {
     // ==================== PLATFORM METRICS ====================
     async getPlatformMetrics(): Promise<PlatformMetrics> {
         try {
-            const response = await fetch('/api/admin/metrics/platform', {
-                credentials: 'include',
-            })
-            const data = await response.json()
+            const { data } = await axiosInstance.get('/api/admin/metrics/platform')
 
             if (!data || typeof data !== 'object') {
                 console.warn('Invalid response structure for platform metrics:', data)
@@ -78,7 +72,6 @@ export const masterAdminService = {
             return data
         } catch (error) {
             console.error('Failed to fetch platform metrics:', error)
-            await new Promise(resolve => setTimeout(resolve, 300))
             return mockPlatformMetrics
         }
     },
@@ -86,39 +79,48 @@ export const masterAdminService = {
     // ==================== HEALTH & ALERTS ====================
     async getStoreHealthScores(): Promise<StoreHealthScore[]> {
         try {
-            const response = await fetch('/api/admin/metrics/stores/health-scores', {
-                credentials: 'include',
-            })
-            const data = await response.json()
+            const { data } = await axiosInstance.get('/api/admin/metrics/stores/health-scores')
 
-            if (!data || !Array.isArray(data)) {
+            // Backend returns { stores: [...] } shape
+            const arr = Array.isArray(data) ? data : (data?.stores || [])
+            if (!Array.isArray(arr)) {
                 console.warn('Invalid response structure for health scores:', data)
                 return mockHealthScores
             }
 
-            return data
-        } catch {
-            await new Promise(resolve => setTimeout(resolve, 400))
+            return arr
+        } catch (error) {
+            console.error('Failed to fetch health scores:', error)
             return mockHealthScores
         }
     },
 
     async getPlatformAlerts(): Promise<PlatformAlert[]> {
         try {
-            const response = await fetch('/api/admin/metrics/platform/alerts', {
-                credentials: 'include',
-            })
-            const data = await response.json()
+            const { data } = await axiosInstance.get('/api/admin/metrics/platform/alerts')
 
-            if (!data || !Array.isArray(data)) {
+            // Backend returns { alerts: [...] } shape
+            const arr = Array.isArray(data) ? data : (data?.alerts || [])
+            if (!Array.isArray(arr)) {
                 console.warn('Invalid response structure for platform alerts:', data)
                 return mockAlerts
             }
 
-            return data
-        } catch {
-            await new Promise(resolve => setTimeout(resolve, 200))
+            return arr
+        } catch (error) {
+            console.error('Failed to fetch platform alerts:', error)
             return mockAlerts
+        }
+    },
+
+    // ==================== DAILY TREND ====================
+    async getDailyTrend(days = 7): Promise<{ date: string; revenue: number; orders: number }[]> {
+        try {
+            const { data } = await axiosInstance.get(`/api/admin/metrics/platform/daily-trend?days=${days}`)
+            return Array.isArray(data?.trend) ? data.trend : []
+        } catch (error) {
+            console.error('Failed to fetch daily trend:', error)
+            return []
         }
     },
 

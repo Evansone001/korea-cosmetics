@@ -21,6 +21,8 @@ interface StoreInfo {
   name: string
   username: string
   logo: string | null
+  status: string
+  rejection_reason?: string | null
 }
 
 const StoreLayout = ({ children }: StoreLayoutProps) => {
@@ -33,6 +35,15 @@ const StoreLayout = ({ children }: StoreLayoutProps) => {
   const [showNotifications, setShowNotifications] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
 
+  const fetchUnreadCount = async () => {
+    try {
+      const res: any = await apiClient.request('/api/user/notifications/unread-count', { method: 'GET' })
+      setUnreadCount(res?.unread_count ?? 0)
+    } catch {
+      // silently ignore
+    }
+  }
+
   const fetchStoreInfo = async () => {
     try {
       const response: any = await apiClient.getMyStore()
@@ -42,6 +53,8 @@ const StoreLayout = ({ children }: StoreLayoutProps) => {
           name: response.store.name,
           username: response.store.username || response.store.id,
           logo: response.store.logo || null,
+          status: response.store.status || 'pending',
+          rejection_reason: response.store.rejection_reason || null,
         })
       } else {
         // User has seller role but no store - redirect to create store
@@ -117,6 +130,14 @@ const StoreLayout = ({ children }: StoreLayoutProps) => {
     }
   }, [user, isAuthorized, storeInfo])
 
+  // Fetch unread notification count on mount and poll every 30s
+  useEffect(() => {
+    if (!isAuthorized) return
+    fetchUnreadCount()
+    const interval = setInterval(fetchUnreadCount, 30_000)
+    return () => clearInterval(interval)
+  }, [isAuthorized])
+
   // Redirect to login if not authenticated after loading
   useEffect(() => {
     if (!localLoading && !isAuthenticated) {
@@ -151,6 +172,63 @@ const StoreLayout = ({ children }: StoreLayoutProps) => {
     )
   }
 
+  // Block access if store is not yet active
+  if (storeInfo && storeInfo.status.toLowerCase() !== 'active') {
+    const normalStatus = storeInfo.status.toLowerCase()
+    const isPending = normalStatus === 'pending'
+    const isRejected = normalStatus === 'inactive' || normalStatus === 'rejected' || normalStatus === 'suspended'
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-center px-6 bg-gradient-to-br from-pink-50 to-rose-50">
+        <div className="bg-white rounded-2xl shadow-lg p-10 max-w-md w-full">
+          {isPending ? (
+            <>
+              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-3xl">⏳</span>
+              </div>
+              <h1 className="text-xl font-bold text-slate-800 mb-2">Store Awaiting Approval</h1>
+              <p className="text-slate-500 text-sm mb-6">
+                Your store <strong>{storeInfo.name}</strong> has been submitted and is pending admin review.
+                You will be notified once it is approved.
+              </p>
+              <Link href="/" className="inline-flex items-center gap-2 bg-slate-800 text-white px-6 py-2 rounded-xl text-sm font-medium hover:bg-slate-700 transition">
+                <ArrowRightIcon size={14} className="rotate-180" /> Go to Home
+              </Link>
+            </>
+          ) : isRejected ? (
+            <>
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-3xl">❌</span>
+              </div>
+              <h1 className="text-xl font-bold text-slate-800 mb-2">Store Application Rejected</h1>
+              <p className="text-slate-500 text-sm mb-4">
+                Your store application was not approved.
+                {storeInfo.rejection_reason && (
+                  <span className="block mt-2 text-red-500">{storeInfo.rejection_reason}</span>
+                )}
+              </p>
+              <div className="flex gap-3 justify-center flex-wrap">
+                <Link href="/create-store" className="bg-slate-800 text-white px-6 py-2 rounded-xl text-sm font-medium hover:bg-slate-700 transition">
+                  Submit New Application
+                </Link>
+                <Link href="/" className="inline-flex items-center gap-2 border border-slate-300 text-slate-600 px-6 py-2 rounded-xl text-sm font-medium hover:bg-slate-50 transition">
+                  <ArrowRightIcon size={14} className="rotate-180" /> Go to Home
+                </Link>
+              </div>
+            </>
+          ) : (
+            <>
+              <h1 className="text-xl font-bold text-slate-800 mb-2">Store Not Active</h1>
+              <p className="text-slate-500 text-sm mb-6">Your store is currently not active. Please contact support.</p>
+              <Link href="/" className="inline-flex items-center gap-2 bg-slate-800 text-white px-6 py-2 rounded-xl text-sm font-medium hover:bg-slate-700 transition">
+                <ArrowRightIcon size={14} className="rotate-180" /> Go to Home
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-pink-50 to-rose-50">
       <SellerNavbar 
@@ -160,12 +238,12 @@ const StoreLayout = ({ children }: StoreLayoutProps) => {
       <div className="flex flex-1 relative">
         <SellerSidebar storeInfo={storeInfo} />
         <div className="flex-1 h-full p-5 lg:pl-12 lg:pt-12 overflow-y-scroll">
-          {children}
+          {isAuthorized ? children : null}
         </div>
       </div>
       <NotificationCenter 
         isOpen={showNotifications}
-        onClose={() => setShowNotifications(false)}
+        onClose={() => { setShowNotifications(false); fetchUnreadCount() }}
       />
     </div>
   )

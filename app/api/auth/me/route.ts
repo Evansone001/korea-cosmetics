@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        Cookie: `auth-token=${authToken}`, // ✅ CLEAN COOKIE ONLY
+        Authorization: `Bearer ${authToken}`,
       },
       cache: 'no-store',
     });

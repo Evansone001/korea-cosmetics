@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { 
     Search, Filter, MoreHorizontal, Shield, Store, User, 
     CheckCircle, XCircle, Clock, Edit2, Ban, Unlock,
@@ -20,7 +20,14 @@ interface UserData {
     avatar?: string
 }
 
-const ROLE_PERMISSIONS = {
+const ROLE_PERMISSIONS: Record<string, { label: string; description: string; color: string; icon: React.ElementType; permissions: string[] }> = {
+    super_admin: {
+        label: 'Super Admin',
+        description: 'Unrestricted platform access',
+        color: 'bg-rose-100 text-rose-700',
+        icon: Shield,
+        permissions: ['*']
+    },
     admin: {
         label: 'Administrator',
         description: 'Full access to all features',
@@ -35,6 +42,13 @@ const ROLE_PERMISSIONS = {
         icon: Store,
         permissions: ['store.manage', 'products.manage', 'orders.view', 'analytics.view']
     },
+    reseller: {
+        label: 'Reseller',
+        description: 'Approved wholesale reseller',
+        color: 'bg-indigo-100 text-indigo-700',
+        icon: Store,
+        permissions: ['store.manage', 'products.manage', 'orders.view', 'wholesale.purchase']
+    },
     customer: {
         label: 'Customer',
         description: 'Can browse and purchase products',
@@ -42,6 +56,14 @@ const ROLE_PERMISSIONS = {
         icon: User,
         permissions: ['products.view', 'orders.create', 'profile.manage']
     }
+}
+
+const ROLE_PERMISSIONS_FALLBACK = {
+    label: 'Unknown',
+    description: 'Unknown role',
+    color: 'bg-slate-100 text-slate-600',
+    icon: User,
+    permissions: []
 }
 
 export default function AdminUsers() {
@@ -373,8 +395,8 @@ export default function AdminUsers() {
         }
     }
 
-    const RoleBadge = ({ role }: { role: UserData['role'] }) => {
-        const config = ROLE_PERMISSIONS[role]
+    const RoleBadge = ({ role }: { role: string }) => {
+        const config = ROLE_PERMISSIONS[role] ?? ROLE_PERMISSIONS_FALLBACK
         const Icon = config.icon
         return (
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${config.color}`}>

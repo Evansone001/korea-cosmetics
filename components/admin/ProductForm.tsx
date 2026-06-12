@@ -78,12 +78,12 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
   const [formData, setFormData] = useState<ProductFormData>({
     name: '',
     description: '',
-    price: 0,
+    price: undefined as unknown as number,
     category: '',
     brand: '',
     manufacturer: '',
     origin: 'South Korea',
-    stock_quantity: 0,
+    stock_quantity: undefined,
     size: '',
     formula: '',
     how_to_use: '',
@@ -92,20 +92,20 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
     skin_types: '',
     skin_concerns: '',
     texture: '',
-    suggested_retail_price: 0,
-    minimum_selling_price: 0,
+    suggested_retail_price: undefined,
+    minimum_selling_price: undefined,
     logistics_mode: 'WAREHOUSE_TO_STORE',
-    tax_rate: 0,
+    tax_rate: undefined,
     requires_license: false,
     storage_requirements: '',
     images: [],
     categories: [],
     subcategories: [],
     // Warehouse and pricing fields
-    warehouse_stock: 0,
-    b2c_retail_price: 0,
-    b2b_wholesale_price: 0,
-    b2b_moq: 1,
+    warehouse_stock: undefined,
+    b2c_retail_price: undefined,
+    b2b_wholesale_price: undefined,
+    b2b_moq: undefined,
     customer_type: 'BOTH',
     is_warehouse_product: true,
     added_by_admin: true,
@@ -121,6 +121,8 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
   const [unsavedChanges, setUnsavedChanges] = useState(false)
   const [formProgress, setFormProgress] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showDetails, setShowDetails] = useState(false)
+  const [showSEO, setShowSEO] = useState(false)
 
   const fetchCategories = useCallback(async () => {
     try {
@@ -211,7 +213,11 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
-    const fieldValue = type === 'number' ? parseFloat(value) || 0 : type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
+    const fieldValue = type === 'number'
+      ? (value === '' ? undefined : parseFloat(value))
+      : type === 'checkbox'
+      ? (e.target as HTMLInputElement).checked
+      : value
     
     // Update form data
     setFormData(prev => ({
@@ -384,39 +390,70 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
         images: images.length > 0 ? images : undefined
       }
 
+      // Helper: convert a comma-separated textarea string to a trimmed array (or null if empty)
+      const toList = (val: any): string[] | null => {
+        if (!val || (typeof val === 'string' && !val.trim())) return null
+        if (Array.isArray(val)) return val.filter(Boolean)
+        return val.split(',').map((s: string) => s.trim()).filter(Boolean)
+      }
+      // Helper: return null instead of empty string for optional text fields
+      const strOrNull = (val: any) => (typeof val === 'string' && val.trim() === '') ? null : val?.trim() ?? null
+
       // Ensure proper data types for backend
       const formattedProductData = {
         ...productData,
-        price: parseFloat(formData.price.toString()),
-        mrp: formData.mrp ? parseFloat(formData.mrp.toString()) : null,
-        stock_quantity: parseInt(formData.stock_quantity?.toString() || '0'),
-        warehouse_stock: parseInt(formData.warehouse_stock?.toString() || '0'),
-        b2c_retail_price: formData.b2c_retail_price ? parseFloat(formData.b2c_retail_price.toString()) : null,
-        b2b_wholesale_price: formData.b2b_wholesale_price ? parseFloat(formData.b2b_wholesale_price.toString()) : null,
-        b2b_moq: parseInt(formData.b2b_moq?.toString() || '1'),
-        tax_rate: formData.tax_rate ? parseFloat(formData.tax_rate.toString()) : 0,
+        price: parseFloat((formData.price ?? 0).toString()),
+        mrp: formData.mrp != null ? parseFloat(formData.mrp.toString()) : null,
+        stock_quantity: parseInt((formData.stock_quantity ?? 0).toString()),
+        warehouse_stock: parseInt((formData.warehouse_stock ?? 0).toString()),
+        b2c_retail_price: formData.b2c_retail_price != null ? parseFloat(formData.b2c_retail_price.toString()) : null,
+        b2b_wholesale_price: formData.b2b_wholesale_price != null ? parseFloat(formData.b2b_wholesale_price.toString()) : null,
+        b2b_moq: parseInt((formData.b2b_moq ?? 1).toString()),
+        tax_rate: formData.tax_rate != null ? parseFloat(formData.tax_rate.toString()) : 0,
+        suggested_retail_price: formData.suggested_retail_price != null ? parseFloat(formData.suggested_retail_price.toString()) : null,
+        minimum_selling_price: formData.minimum_selling_price != null ? parseFloat(formData.minimum_selling_price.toString()) : null,
+        // List fields — schema expects arrays, form stores as comma-separated strings
+        key_benefits: toList(formData.key_benefits),
+        key_ingredients: toList(formData.key_ingredients),
+        skin_types: toList(formData.skin_types),
+        skin_concerns: toList(formData.skin_concerns),
+        // Optional text fields — send null not empty string
+        brand: strOrNull(formData.brand),
+        manufacturer: strOrNull(formData.manufacturer),
+        origin: strOrNull(formData.origin),
+        size: strOrNull(formData.size),
+        formula: strOrNull(formData.formula),
+        how_to_use: strOrNull(formData.how_to_use),
+        texture: strOrNull(formData.texture),
+        storage_requirements: strOrNull(formData.storage_requirements),
         // Clean up SEO fields
         meta_title: formData.meta_title?.trim() || null,
         meta_description: formData.meta_description?.trim() || null,
         // Set default status if not provided
         status: formData.status || 'draft',
         customer_type: formData.customer_type || 'BOTH',
-        is_warehouse_product: formData.is_warehouse_product !== false,
-        added_by_admin: formData.added_by_admin !== false
+        is_warehouse_product: formData.is_warehouse_product === true,
+        added_by_admin: formData.added_by_admin === true
       }
 
-      toast.loading('Creating product...', { id: 'create-product' })
-      const response = await apiClient.createProduct(formattedProductData)
-      
-      toast.success('Product created successfully!', { id: 'create-product' })
-      
-      // Clear draft after successful creation
-      localStorage.removeItem('product-create-draft')
-      
-      if (onSave) {
-        onSave(formattedProductData)
+      const isEditing = !!existingProduct
+      const toastId = isEditing ? 'update-product' : 'create-product'
+      toast.loading(isEditing ? 'Saving changes...' : 'Creating product...', { id: toastId })
+
+      let response: any
+      if (isEditing) {
+        response = await apiClient.updateProduct(existingProduct.id, formattedProductData)
+        toast.success('Product updated successfully!', { id: toastId })
+      } else {
+        response = await apiClient.createProduct(formattedProductData)
+        toast.success('Product created successfully!', { id: toastId })
+        localStorage.removeItem('product-create-draft')
       }
-      
+
+      if (onSave) {
+        onSave(response?.product ?? formattedProductData)
+      }
+
       if (!isModal) {
         if (formData.status === 'draft') {
           router.push('/admin/products?filter=drafts')
@@ -425,11 +462,10 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
         }
       }
     } catch (error: any) {
-      console.error('Failed to create product:', error)
-      
-      // Enhanced error handling for backend responses
-      let errorMessage = 'Failed to create product'
-      
+      console.error('Failed to save product:', error)
+
+      let errorMessage = existingProduct ? 'Failed to update product' : 'Failed to create product'
+
       if (error.response?.data?.error) {
         errorMessage = error.response.data.error
       } else if (error.response?.data?.message) {
@@ -437,8 +473,8 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
       } else if (error.message) {
         errorMessage = error.message
       }
-      
-      toast.error(errorMessage, { id: 'create-product' })
+
+      toast.error(errorMessage, { id: existingProduct ? 'update-product' : 'create-product' })
     } finally {
       setIsSubmitting(false)
     }
@@ -517,6 +553,7 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
                 value={formData.name ?? ''}
                 onChange={handleInputChange}
                 required
+                placeholder="e.g. COSRX Snail Mucin 96% Power Repairing Essence"
                 className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent ${
                   validation.name?.isValid === false ? 'border-red-300 focus:ring-red-500' : 'border-slate-300'
                 }`}
@@ -546,6 +583,7 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
                 required
                 step="0.01"
                 min="0"
+                placeholder="e.g. 29.99"
                 className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent ${
                   validation.price?.isValid === false ? 'border-red-300 focus:ring-red-500' : 'border-slate-300'
                 }`}
@@ -569,6 +607,7 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
                 onChange={handleInputChange}
                 step="0.01"
                 min="0"
+                placeholder="e.g. 39.99"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
               />
             </div>
@@ -630,9 +669,10 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
               <input
                 type="number"
                 name="stock_quantity"
-                value={formData.stock_quantity ?? 0}
+                value={formData.stock_quantity ?? ''}
                 onChange={handleInputChange}
                 min="0"
+                placeholder="e.g. 100"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
               />
             </div>
@@ -653,10 +693,17 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
           </div>
         </div>
 
-        {/* Product Details */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">Product Details</h2>
-          
+        {/* Product Details — collapsible */}
+        <div className="bg-white rounded-xl border border-slate-200">
+          <button
+            type="button"
+            onClick={() => setShowDetails(v => !v)}
+            className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-slate-50 transition-colors rounded-xl"
+          >
+            <h2 className="text-lg font-semibold text-slate-900">Product Details <span className="text-sm font-normal text-slate-400">(optional)</span></h2>
+            <svg className={`w-5 h-5 text-slate-400 transition-transform ${showDetails ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+          </button>
+          {showDetails && <div className="px-6 pb-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -725,6 +772,7 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
                 value={formData.how_to_use ?? ''}
                 onChange={handleInputChange}
                 rows={3}
+                placeholder="e.g. Apply a small amount to cleansed face and neck. Gently pat until absorbed."
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
               />
             </div>
@@ -738,6 +786,7 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
                 value={formData.key_benefits ?? ''}
                 onChange={handleInputChange}
                 rows={3}
+                placeholder="e.g. Deeply hydrates, brightens skin tone, reduces fine lines"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
               />
             </div>
@@ -751,6 +800,7 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
                 value={formData.key_ingredients ?? ''}
                 onChange={handleInputChange}
                 rows={3}
+                placeholder="e.g. Snail Secretion Filtrate 96%, Niacinamide, Panthenol"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
               />
             </div>
@@ -764,10 +814,12 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
                 value={formData.skin_concerns ?? ''}
                 onChange={handleInputChange}
                 rows={2}
+                placeholder="e.g. Dryness, Dullness, Uneven texture, Acne scars"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
               />
             </div>
           </div>
+          </div>}
         </div>
 
         {/* Images */}
@@ -899,9 +951,10 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
               <input
                 type="number"
                 name="warehouse_stock"
-                value={formData.warehouse_stock ?? 0}
+                value={formData.warehouse_stock ?? ''}
                 onChange={handleInputChange}
                 min="0"
+                placeholder="e.g. 500"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
               />
             </div>
@@ -975,19 +1028,27 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
               <input
                 type="number"
                 name="b2b_moq"
-                value={formData.b2b_moq ?? 1}
+                value={formData.b2b_moq ?? ''}
                 onChange={handleInputChange}
                 min="1"
+                placeholder="e.g. 10"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
               />
             </div>
           </div>
         </div>
 
-        {/* SEO Settings */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">SEO Settings</h2>
-          
+        {/* SEO Settings — collapsible */}
+        <div className="bg-white rounded-xl border border-slate-200">
+          <button
+            type="button"
+            onClick={() => setShowSEO(v => !v)}
+            className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-slate-50 transition-colors rounded-xl"
+          >
+            <h2 className="text-lg font-semibold text-slate-900">SEO Settings <span className="text-sm font-normal text-slate-400">(optional)</span></h2>
+            <svg className={`w-5 h-5 text-slate-400 transition-transform ${showSEO ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+          </button>
+          {showSEO && <div className="px-6 pb-6">
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -1017,24 +1078,34 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
               />
             </div>
           </div>
+          </div>}
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center justify-between gap-4">
+        {/* Action Buttons — sticky in modal mode */}
+        <div className={`flex items-center justify-between gap-4${isModal ? ' sticky bottom-0 bg-white border-t border-slate-100 py-4 -mx-6 px-6 mt-2' : ''}`}>
           <div className="flex items-center gap-2">
-            {unsavedChanges && (
+            {onCancel && (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+            )}
+            {unsavedChanges && !existingProduct && (
               <button
                 type="button"
                 onClick={() => {
                   setFormData({
                     name: '',
                     description: '',
-                    price: 0,
+                    price: undefined as unknown as number,
                     category: '',
                     brand: '',
                     manufacturer: '',
                     origin: 'South Korea',
-                    stock_quantity: 0,
+                    stock_quantity: undefined,
                     size: '',
                     formula: '',
                     how_to_use: '',
@@ -1043,19 +1114,19 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
                     skin_types: '',
                     skin_concerns: '',
                     texture: '',
-                    suggested_retail_price: 0,
-                    minimum_selling_price: 0,
+                    suggested_retail_price: undefined,
+                    minimum_selling_price: undefined,
                     logistics_mode: 'WAREHOUSE_TO_STORE',
-                    tax_rate: 0,
+                    tax_rate: undefined,
                     requires_license: false,
                     storage_requirements: '',
                     images: [],
                     categories: [],
                     subcategories: [],
-                    warehouse_stock: 0,
-                    b2c_retail_price: 0,
-                    b2b_wholesale_price: 0,
-                    b2b_moq: 1,
+                    warehouse_stock: undefined,
+                    b2c_retail_price: undefined,
+                    b2b_wholesale_price: undefined,
+                    b2b_moq: undefined,
                     customer_type: 'BOTH',
                     is_warehouse_product: true,
                     added_by_admin: true,
@@ -1086,12 +1157,12 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
             {isSubmitting ? (
               <>
                 <Loader2 className="animate-spin" size={20} />
-                <span>Creating Product...</span>
+                <span>{existingProduct ? 'Saving...' : 'Creating...'}</span>
               </>
             ) : (
               <>
                 <Plus size={20} />
-                <span>Create Product</span>
+                <span>{existingProduct ? 'Save Changes' : 'Create Product'}</span>
               </>
             )}
           </button>

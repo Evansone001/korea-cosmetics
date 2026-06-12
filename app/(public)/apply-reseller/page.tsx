@@ -61,6 +61,31 @@ export default function ApplyReseller() {
         }
     }, [isAuthenticated, authLoading, router])
 
+    // If already has an application, redirect to status page
+    useEffect(() => {
+        if (!isAuthenticated) return
+        const checkExisting = async () => {
+            try {
+                const response: any = await apiClient.getMyResellerApplication()
+                if (response.application) {
+                    if (response.application.status === 'approved') {
+                        try {
+                            const storeRes: any = await apiClient.getMyStore()
+                            router.push(storeRes?.store ? '/store' : '/create-store')
+                        } catch {
+                            router.push('/create-store')
+                        }
+                    } else {
+                        router.push('/reseller-application-status')
+                    }
+                }
+            } catch {
+                // No application — allow access to form
+            }
+        }
+        checkExisting()
+    }, [isAuthenticated, router])
+
     // Show loading state while checking authentication
     if (authLoading) {
         return (

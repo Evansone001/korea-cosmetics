@@ -1,6 +1,6 @@
 'use client'
 import { usePathname, useRouter } from "next/navigation"
-import { HomeIcon, LayoutListIcon, SquarePenIcon, Store, ChevronLeft, ChevronRight, Package, ShoppingBag, Warehouse, Menu, X, LogOut, User, LucideIcon } from "lucide-react"
+import { HomeIcon, LayoutListIcon, SquarePenIcon, Store, ChevronLeft, ChevronRight, Package, ShoppingBag, Warehouse, Menu, X, LogOut, User, LucideIcon, ClipboardList } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useState, useEffect } from "react"
@@ -37,6 +37,7 @@ const StoreSidebar = ({ storeInfo }: StoreSidebarProps) => {
   const sidebarLinks: SidebarLink[] = [
     { name: 'Dashboard', href: '/store', icon: HomeIcon },
     { name: 'Wholesale', href: '/store/wholesale', icon: ShoppingBag },
+    { name: 'Warehouse Purchases', href: '/store/wholesale/orders', icon: ClipboardList },
     { name: 'Inventory', href: '/store/inventory', icon: Warehouse },
     { name: 'Catalog', href: '/store/catalog', icon: Package },
     { name: 'Manage Product', href: '/store/manage-product', icon: SquarePenIcon },

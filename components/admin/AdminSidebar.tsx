@@ -36,7 +36,7 @@ const AdminSidebar = () => {
         { name: 'Dashboard', href: '/admin', icon: HomeIcon },
         { name: 'Catalog', href: '/admin/catalog', icon: Package },
         { name: 'Warehouse', href: '/admin/warehouse', icon: Warehouse },
-        { name: 'Wholesale', href: '/admin/wholesale-orders', icon: Truck },
+        { name: 'Wholesale Orders', href: '/admin/wholesale-orders', icon: Truck },
         { name: 'Users', href: '/admin/users', icon: Users },
         { name: 'Orders', href: '/admin/orders', icon: ShoppingBag },
         { name: 'Stores', href: '/admin/stores', icon: StoreIcon },

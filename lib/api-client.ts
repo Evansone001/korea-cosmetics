@@ -855,6 +855,12 @@ class ApiClient {
     });
   }
 
+  async removeStoreProduct(storeProductId: string) {
+    return this.request(`/api/inventory/${storeProductId}`, {
+      method: 'DELETE',
+    });
+  }
+
   async getStoreProductByProductId(productId: string): Promise<{
     store_product?: {
       store_product_name?: string;
@@ -960,18 +966,31 @@ class ApiClient {
     });
   }
 
-  // Store Management endpoints - Fixed endpoint from /api/store/my-store to /api/stores/my-store
-async getMyStore() {
-  try {
-    const response = await axiosInstance.get('/api/stores/my-store');
-    return response.data;
-  } catch (error: any) {
-    if (error.response?.status === 404 || error.response?.data?.error?.includes('No store found')) {
-      return null;
+  // Store Management endpoints - routes through Next.js proxy which reads auth-token cookie server-side
+  async getMyStore() {
+    try {
+      const response = await fetch('/api/store/my-store', {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      if (response.status === 404) return null;
+      if (response.status === 401) {
+        const err = new Error('Request failed with status code 401');
+        (err as any).response = { status: 401 };
+        throw err;
+      }
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error((data as any).error || `Request failed with status ${response.status}`);
+      }
+      return response.json();
+    } catch (error: any) {
+      if (error?.response?.status === 404 || error?.message?.includes('No store found')) {
+        return null;
+      }
+      throw error;
     }
-    throw error;
   }
-}
 
   async uploadStoreDocument(file: File, documentType: 'business' | 'identity') {
     const formData = new FormData();
@@ -1286,6 +1305,10 @@ async getMyStore() {
     return this.request<{ products: any[]; total: number; limit: number; offset: number; store_customer_type: string }>(`/api/store/wholesale?${queryParams.toString()}`);
   }
 
+  async getMyWholesalePurchases() {
+    return this.request<{ purchases: any[] }>('/api/warehouse-purchases/my-purchases');
+  }
+
   async purchaseFromWholesale(
     productId: string,
     quantity: number,
@@ -1381,7 +1404,16 @@ async getMyStore() {
   }
 
   async getMyResellerApplication() {
-    return this.request('/api/reseller-applications/my-application');
+    const response = await fetch('/api/reseller-applications/my-application', {
+      credentials: 'include',
+      cache: 'no-store',
+    });
+    if (response.status === 404) return { application: null };
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error((data as any).error || `Request failed with status ${response.status}`);
+    }
+    return response.json();
   }
 
   async getResellerApplications(params?: { status?: string; page?: number; per_page?: number }) {

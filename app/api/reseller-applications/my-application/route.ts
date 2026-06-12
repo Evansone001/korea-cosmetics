@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const response = await fetch(`${FLASK_BACKEND_URL}/api/stores/my-store`, {
+    const response = await fetch(`${FLASK_BACKEND_URL}/api/reseller-applications/my-application`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
-    console.error('[My Store API] Error:', error);
-    return NextResponse.json({ error: 'Failed to fetch store' }, { status: 500 });
+    console.error('[Reseller Application API] Error:', error);
+    return NextResponse.json({ error: 'Failed to fetch reseller application' }, { status: 500 });
   }
 }

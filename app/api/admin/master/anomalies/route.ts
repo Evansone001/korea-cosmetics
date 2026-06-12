@@ -15,15 +15,13 @@ export async function GET() {
     }
 }
 
-// PUT /api/admin/master/anomalies/[id] - Update anomaly status
+// PUT /api/admin/master/anomalies - Update anomaly status
 export async function PUT(
-    request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    request: NextRequest
 ) {
     try {
-        const { id } = await params
         const body = await request.json()
-        const { status } = body
+        const { id, status } = body
         
         if (!['resolved', 'ignored', 'investigating'].includes(status)) {
             return NextResponse.json(

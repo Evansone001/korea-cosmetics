@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
   Download,
   RefreshCw,
@@ -12,16 +11,11 @@ import {
   AlertCircle,
   Building2,
   Filter,
-  Send,
   Search,
   Plus,
   X,
   Edit2,
   Trash2,
-  Save,
-  Clock,
-  CheckCircle,
-  XCircle,
   Warehouse,
   Upload
 } from 'lucide-react';
@@ -82,9 +76,7 @@ interface PendingProduct {
 }
 
 export default function ProductCatalogPage() {
-  const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(false);
   const [manufacturer, setManufacturer] = useState('');
   const [category, setCategory] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -92,21 +84,6 @@ export default function ProductCatalogPage() {
   const [manufacturers, setManufacturers] = useState<string[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [subcategories, setSubcategories] = useState<any[]>([]);
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    price: '',
-    mrp: '',
-    category: '',
-    categories: [] as string[],
-    subcategories: [] as string[],
-    manufacturer: '',
-    brand: '',
-    stock: '',
-    origin: 'South Korea',
-    images: [] as string[],
-  });
-
   // Add to Warehouse Modal State
   const [warehouseModalOpen, setWarehouseModalOpen] = useState(false);
   const [warehouseProduct, setWarehouseProduct] = useState<Product | null>(null);
@@ -118,7 +95,6 @@ export default function ProductCatalogPage() {
     b2b_moq: 1,
     customer_type: 'BOTH' as 'B2C' | 'B2B' | 'BOTH',
   });
-  const [uploadingImages, setUploadingImages] = useState(false);
   const [showManufacturerModal, setShowManufacturerModal] = useState(false);
   const [newManufacturerName, setNewManufacturerName] = useState('');
   const [addingManufacturer, setAddingManufacturer] = useState(false);
@@ -126,9 +102,6 @@ export default function ProductCatalogPage() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [addingCategory, setAddingCategory] = useState(false);
   const [newCategoryParentId, setNewCategoryParentId] = useState<string>('');
-  const [selectedCategoryTags, setSelectedCategoryTags] = useState<any[]>([]);
-  const [selectedSubcategoryTags, setSelectedSubcategoryTags] = useState<any[]>([]);
-
   // Load products on mount
   useEffect(() => {
     fetchProducts();
@@ -143,43 +116,6 @@ export default function ProductCatalogPage() {
   useEffect(() => {
     fetchCategories();
   }, []);
-
-  // Helper functions for tag-based selection
-  const addCategoryTag = (category: any) => {
-    if (!selectedCategoryTags?.find((c: any) => c.id === category.id)) {
-      setSelectedCategoryTags([...(selectedCategoryTags || []), category]);
-      // Update formData.categories
-      setFormData({ ...formData, categories: [...(formData.categories || []), category.id] });
-    }
-  };
-
-  const removeCategoryTag = (categoryId: string) => {
-    setSelectedCategoryTags((selectedCategoryTags || []).filter((c: any) => c.id !== categoryId));
-    // Update formData.categories
-    setFormData({ ...formData, categories: (formData.categories || []).filter((id: string) => id !== categoryId) });
-    // Also remove subcategories that belong to this category
-    const categorySubcategories = (subcategories || []).filter((s: any) => s.parent_id === categoryId);
-    categorySubcategories.forEach((sub: any) => removeSubcategoryTag(sub.id));
-  };
-
-  const addSubcategoryTag = (subcategory: any) => {
-    if (!selectedSubcategoryTags?.find((s: any) => s.id === subcategory.id)) {
-      setSelectedSubcategoryTags([...(selectedSubcategoryTags || []), subcategory]);
-      // Update formData.subcategories
-      setFormData({ ...formData, subcategories: [...(formData.subcategories || []), subcategory.id] });
-      // Ensure parent category is also selected
-      const parentCategory = (categories || []).find((c: any) => c.id === subcategory.parent_id);
-      if (parentCategory && !selectedCategoryTags?.find((c: any) => c.id === parentCategory.id)) {
-        addCategoryTag(parentCategory);
-      }
-    }
-  };
-
-  const removeSubcategoryTag = (subcategoryId: string) => {
-    setSelectedSubcategoryTags((selectedSubcategoryTags || []).filter((s: any) => s.id !== subcategoryId));
-    // Update formData.subcategories
-    setFormData({ ...formData, subcategories: (formData.subcategories || []).filter((id: string) => id !== subcategoryId) });
-  };
 
   const fetchManufacturers = async () => {
     try {
@@ -274,33 +210,6 @@ export default function ProductCatalogPage() {
     }
   };
 
-  // Populate form when editingProduct changes
-  useEffect(() => {
-    if (editingProduct) {
-      const productCategories = Array.isArray(editingProduct.categories) ? editingProduct.categories : [];
-      const mainCategories = productCategories.filter((c: any) => !c.parent_id || !c.is_subcategory);
-      const subCategories = productCategories.filter((c: any) => c.parent_id && c.is_subcategory);
-      
-      setSelectedCategoryTags(mainCategories);
-      setSelectedSubcategoryTags(subCategories);
-      
-      setFormData({
-        name: editingProduct.name || '',
-        description: editingProduct.description || '',
-        price: editingProduct.price ? editingProduct.price.toString() : '',
-        mrp: editingProduct.mrp ? editingProduct.mrp.toString() : '',
-        category: editingProduct.category || '',
-        categories: mainCategories?.map((c: any) => c.id) || [],
-        subcategories: subCategories?.map((c: any) => c.id) || [],
-        manufacturer: editingProduct.manufacturer || '',
-        brand: editingProduct.brand || '',
-        stock: editingProduct.stock_quantity ? editingProduct.stock_quantity.toString() : '',
-        origin: editingProduct.origin || 'South Korea',
-        images: editingProduct.images || [],
-      });
-    }
-  }, [editingProduct]);
-
   const fetchProducts = async () => {
     try {
       const response: any = await apiClient.getProducts({ limit: 100 });
@@ -329,82 +238,16 @@ export default function ProductCatalogPage() {
   };
 
 
-  const handleAddProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.name || formData.categories.length === 0) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    try {
-      // Build product data for API
-      const productData: any = {
-        name: formData.name,
-        description: formData.description,
-        price: formData.price ? parseFloat(formData.price) : 0,
-        mrp: formData.mrp ? parseFloat(formData.mrp) : undefined,
-        manufacturer: formData.manufacturer,
-        brand: formData.brand,
-        images: formData.images,
-        stock_quantity: parseInt(formData.stock) || 0,
-        origin: formData.origin,
-      };
-
-      // Use selected categories and subcategories from tags
-      if (formData.categories && formData.categories.length > 0) {
-        productData.categories = formData.categories;
-        // Set legacy category field for backward compatibility
-        productData.category = formData.categories[0];
-      }
-      if (formData.subcategories && formData.subcategories.length > 0) {
-        productData.subcategories = formData.subcategories;
-      }
-
-      if (editingProduct) {
-        // Update existing product
-        const response: any = await apiClient.updateProduct(editingProduct.id, productData);
-        setProducts(prev => prev.map(p => p.id === editingProduct.id ? { ...p, ...response.product } : p));
-        toast.success('Product updated successfully!');
-      } else {
-        // Create new product
-        const response: any = await apiClient.createProduct(productData);
-        const savedProduct: Product = {
-          ...response.product,
-          source: 'manual',
-        };
-        setProducts(prev => [savedProduct, ...prev]);
-        toast.success('Product added successfully!');
-      }
-      
-      setShowAddForm(false);
-      setEditingProduct(null);
-      setSelectedCategoryTags([]);
-      setSelectedSubcategoryTags([]);
-      setFormData({
-        name: '',
-        description: '',
-        price: '',
-        mrp: '',
-        category: '',
-        categories: [] as string[],
-        subcategories: [] as string[],
-        manufacturer: '',
-        brand: '',
-        stock: '',
-        origin: 'South Korea',
-        images: [] as string[],
-      });
-    } catch (error: any) {
-      console.error('Failed to save product:', error);
-      toast.error(error.message || 'Failed to save product to database');
-    }
-  };
-
-  const handleDeleteProduct = (productId: string) => {
+  const handleDeleteProduct = async (productId: string) => {
     if (!confirm('Are you sure you want to delete this product?')) return;
-    setProducts(prev => prev.filter(p => p.id !== productId));
-    toast.success('Product deleted');
+    try {
+      await apiClient.deleteProduct(productId);
+      setProducts(prev => prev.filter(p => p.id !== productId));
+      toast.success('Product deleted');
+    } catch (error: any) {
+      console.error('Failed to delete product:', error);
+      toast.error(error.message || 'Failed to delete product');
+    }
   };
 
   // Add to Warehouse handlers
@@ -444,10 +287,7 @@ export default function ProductCatalogPage() {
       toast.success(`${warehouseProduct.name} added to warehouse`);
       setWarehouseModalOpen(false);
       setWarehouseProduct(null);
-      // Refetch products to update is_warehouse_product status
       await fetchProducts();
-      // Redirect to warehouse page to see the added product
-      router.push('/admin/warehouse');
     } catch (error: any) {
       console.error('Failed to add to warehouse:', error);
       
@@ -475,52 +315,6 @@ export default function ProductCatalogPage() {
     } finally {
       setAddingToWarehouse(false);
     }
-  };
-
-  // Image upload handlers
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    
-    // Check total would exceed 5
-    if (formData.images.length + files.length > 5) {
-      toast.error(`You can only upload up to 5 images. You currently have ${formData.images.length}.`);
-      return;
-    }
-    
-    setUploadingImages(true);
-    
-    try {
-      const uploadPromises = Array.from(files).map(file => 
-        apiClient.uploadProductImage(file)
-      );
-      
-      const results = await Promise.all(uploadPromises);
-      // Construct full URLs for image previews
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-      const newUrls = results.map(r => `${backendUrl}${r.url}`);
-      
-      setFormData(prev => ({
-        ...prev,
-        images: [...prev.images, ...newUrls]
-      }));
-      
-      toast.success(`${files.length} image(s) uploaded successfully`);
-    } catch (error: any) {
-      console.error('Image upload failed:', error);
-      toast.error(error.message || 'Failed to upload image(s)');
-    } finally {
-      setUploadingImages(false);
-      // Reset input so same file can be selected again if needed
-      e.target.value = '';
-    }
-  };
-
-  const removeImage = (idx: number) => {
-    setFormData(prev => ({
-      ...prev,
-      images: prev.images.filter((_, i) => i !== idx)
-    }));
   };
 
   const filteredProducts = products.filter(p => {
@@ -580,9 +374,10 @@ export default function ProductCatalogPage() {
             <div className="p-6">
               <ProductForm 
                 existingProduct={editingProduct}
-                onSave={(productData: any) => {
-                  // Handle save logic here
-                  handleAddProduct(productData);
+                onSave={async (productData: any) => {
+                  await fetchProducts();
+                  setShowAddForm(false);
+                  setEditingProduct(null);
                 }}
                 onCancel={() => {
                   setShowAddForm(false);
@@ -709,15 +504,30 @@ export default function ProductCatalogPage() {
                         </span>
                       )}
                     </div>
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      product.stock_quantity > 10
-                        ? 'bg-green-100 text-green-700'
-                        : product.stock_quantity > 0
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'bg-red-100 text-red-700'
-                    }`}>
-                      {product.stock_quantity} in stock
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        (product as any).status === 'active' ? 'bg-green-100 text-green-700'
+                        : (product as any).status === 'pending' ? 'bg-amber-100 text-amber-700'
+                        : (product as any).status === 'draft' ? 'bg-slate-100 text-slate-500'
+                        : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {(product as any).status || 'draft'}
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        product.stock_quantity > 10
+                          ? 'bg-green-100 text-green-700'
+                          : product.stock_quantity > 0
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}>
+                        {product.stock_quantity} in stock
+                      </span>
+                      {product.is_warehouse_product && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                          WH: {(product as any).warehouse_stock ?? 0}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 mt-3">
                     {product.category && product.categories?.length > 0 ? (
