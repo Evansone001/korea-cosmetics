@@ -1195,7 +1195,7 @@ class ApiClient {
     });
   }
 
-  // Upload endpoint - route through Next.js API proxy to handle authentication
+  // Upload endpoint - use axiosInstance so Authorization Bearer is attached automatically
   async uploadProductImage(file: File): Promise<{
     url: string;
     filename: string;
@@ -1203,20 +1203,11 @@ class ApiClient {
     const formData = new FormData();
     formData.append('file', file);
 
-    // Route through Next.js API proxy at /api/products/upload
-    // The Next.js API route will handle authentication and forward to backend
-    const response = await fetch('/api/products/upload', {
-      method: 'POST',
-      body: formData,
-      credentials: 'include', // Include cookies for authentication
+    const { data } = await axiosInstance.post('/api/products/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || error.message || 'Upload failed');
-    }
-
-    return response.json();
+    return data;
   }
 
   // ==================== IMPORT API (Admin) ====================
