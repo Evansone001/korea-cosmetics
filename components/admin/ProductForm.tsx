@@ -1093,7 +1093,7 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
                 Cancel
               </button>
             )}
-            {unsavedChanges && !existingProduct && (
+            {!existingProduct && (
               <button
                 type="button"
                 onClick={() => {
