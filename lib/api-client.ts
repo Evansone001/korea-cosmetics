@@ -966,29 +966,15 @@ class ApiClient {
     });
   }
 
-  // Store Management endpoints - routes through Next.js proxy which reads auth-token cookie server-side
   async getMyStore() {
     try {
-      const response = await fetch('/api/store/my-store', {
-        credentials: 'include',
-        cache: 'no-store',
-      });
-      if (response.status === 404) return null;
-      if (response.status === 401) {
-        const err = new Error('Request failed with status code 401');
-        (err as any).response = { status: 401 };
-        throw err;
-      }
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error((data as any).error || `Request failed with status ${response.status}`);
-      }
-      return response.json();
+      const { data } = await axiosInstance.get('/api/stores/my-store')
+      return data
     } catch (error: any) {
-      if (error?.response?.status === 404 || error?.message?.includes('No store found')) {
-        return null;
+      if (error?.response?.status === 404 || error?.response?.status === 401 || error?.message?.includes('No store found')) {
+        return null
       }
-      throw error;
+      throw error
     }
   }
 
@@ -1395,16 +1381,15 @@ class ApiClient {
   }
 
   async getMyResellerApplication() {
-    const response = await fetch('/api/reseller-applications/my-application', {
-      credentials: 'include',
-      cache: 'no-store',
-    });
-    if (response.status === 404) return { application: null };
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      throw new Error((data as any).error || `Request failed with status ${response.status}`);
+    try {
+      const { data } = await axiosInstance.get('/api/reseller-applications/my-application')
+      return data
+    } catch (error: any) {
+      if (error?.response?.status === 404 || error?.response?.status === 401) {
+        return { application: null }
+      }
+      throw error
     }
-    return response.json();
   }
 
   async getResellerApplications(params?: { status?: string; page?: number; per_page?: number }) {
