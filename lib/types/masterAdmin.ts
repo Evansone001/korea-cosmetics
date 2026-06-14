@@ -35,6 +35,10 @@ export interface StorePerformance {
 export interface PlatformMetrics {
     totalRevenue: number
     totalOrders: number
+    b2cRevenue: number
+    b2bRevenue: number
+    b2cOrders: number
+    b2bOrders: number
     totalCustomers: number
     totalProducts: number
     activeStores: number

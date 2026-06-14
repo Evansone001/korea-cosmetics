@@ -114,19 +114,26 @@ export default function CreateStore() {
 
     const fetchSellerStatus = async () => {
         try {
-            // Check reseller application status for all users
-            const resellerResponse: any = await apiClient.getMyResellerApplication()
-            if (resellerResponse.application) {
-                if (resellerResponse.application.status !== 'approved') {
-                    // Pending or rejected — send to status page where they can refresh/reapply
-                    router.push('/reseller-application-status')
+            // Check if user is admin (admins don't need reseller application)
+            const authState = (await import('@/lib/hooks')).useAppSelector((state: any) => state?.auth)
+            const userRole = authState?.user?.role
+            const isAdmin = userRole === 'admin' || userRole === 'super_admin'
+
+            // Check reseller application status (skip for admins)
+            if (!isAdmin) {
+                const resellerResponse: any = await apiClient.getMyResellerApplication()
+                if (resellerResponse.application) {
+                    if (resellerResponse.application.status !== 'approved') {
+                        // Pending or rejected — send to status page where they can refresh/reapply
+                        router.push('/reseller-application-status')
+                        return
+                    }
+                    // Approved — proceed to store check
+                } else {
+                    // No application at all — redirect to apply
+                    router.push('/apply-reseller')
                     return
                 }
-                // Approved — proceed to store check
-            } else {
-                // No application at all — redirect to apply
-                router.push('/apply-reseller')
-                return
             }
 
             // Then check if store exists (null means no store found — allow creation)

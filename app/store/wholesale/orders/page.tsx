@@ -12,6 +12,10 @@ import {
   ArrowLeft,
   ShoppingBag,
   RefreshCw,
+  Bike,
+  Phone,
+  MapPin,
+  Copy,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -160,9 +164,85 @@ export default function WholesaleOrdersPage() {
                         ✅ Order approved and is being prepared for shipment.
                       </div>
                     )}
-                    {status === 'shipped' && purchase.tracking_number && (
-                      <div className="mt-4 p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-xs text-indigo-700">
-                        🚚 Tracking: <strong>{purchase.tracking_number}</strong>
+                    {/* Shipping Information */}
+                    {(status === 'shipped' || status === 'delivered') && purchase.tracking_number && (
+                      <div className={`mt-4 p-4 rounded-xl border ${
+                        purchase.shipping_carrier === 'BODA'
+                          ? 'bg-orange-50 border-orange-200'
+                          : 'bg-indigo-50 border-indigo-200'
+                      }`}>
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className={`font-semibold text-sm flex items-center gap-2 ${
+                            purchase.shipping_carrier === 'BODA' ? 'text-orange-800' : 'text-indigo-800'
+                          }`}>
+                            {purchase.shipping_carrier === 'BODA' ? (
+                              <Bike className="w-4 h-4" />
+                            ) : (
+                              <Truck className="w-4 h-4" />
+                            )}
+                            Shipping Information
+                          </h4>
+                          {purchase.shipping_carrier && (
+                            <span className={`text-xs px-2 py-0.5 rounded ${
+                              purchase.shipping_carrier === 'BODA'
+                                ? 'bg-orange-100 text-orange-700'
+                                : 'bg-indigo-100 text-indigo-700'
+                            }`}>
+                              {purchase.shipping_carrier === 'BODA' ? 'Boda Boda' :
+                               purchase.shipping_carrier === 'KEN' ? 'Kenya Courier' :
+                               purchase.shipping_carrier === 'DHL' ? 'DHL Express' :
+                               purchase.shipping_carrier}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Boda Boda Rider Info */}
+                        {purchase.shipping_carrier === 'BODA' && purchase.rider_code && (
+                          <div className="bg-white rounded-lg p-3 border border-orange-100 mb-3">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-xs font-medium text-orange-800">🛵 Rider Assigned</span>
+                              {purchase.delivery_type && (
+                                <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">
+                                  {purchase.delivery_type === 'same_day' ? 'Same Day' :
+                                   purchase.delivery_type === 'express' ? 'Express' : 'Scheduled'}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-orange-900">Code: {purchase.rider_code}</p>
+                            {purchase.rider_phone && (
+                              <a
+                                href={`tel:${purchase.rider_phone}`}
+                                className="flex items-center gap-1 text-sm text-orange-700 hover:text-orange-800 mt-1"
+                              >
+                                <Phone className="w-3.5 h-3.5" />
+                                {purchase.rider_phone}
+                              </a>
+                            )}
+                            {purchase.estimated_delivery_time && (
+                              <p className="text-xs text-orange-600 mt-1.5 flex items-center gap-1">
+                                <MapPin className="w-3 h-3" />
+                                Est. arrival: {new Date(purchase.estimated_delivery_time).toLocaleString()}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Tracking Number */}
+                        <div className="flex items-center gap-2 bg-white rounded-lg p-2.5 border border-slate-200">
+                          <code className="text-xs font-mono text-slate-700 flex-1 truncate">
+                            {purchase.tracking_number}
+                          </code>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(purchase.tracking_number)
+                              toast.success('Tracking number copied')
+                            }}
+                            className="p-1.5 hover:bg-slate-100 rounded text-slate-500"
+                            title="Copy tracking number"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     )}
                     {status === 'cancelled' && purchase.rejection_reason && (

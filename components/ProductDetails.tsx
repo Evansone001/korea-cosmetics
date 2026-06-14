@@ -22,7 +22,7 @@ interface ProductDetailsProps {
 
 const ProductDetails = ({ product, type }: ProductDetailsProps) => {
     const productId = product.id;
-    const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || '$';
+    const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || 'KES';
     const productUrl = typeof window !== 'undefined' ? window.location.href : '';
 
     const dispatch = useAppDispatch();

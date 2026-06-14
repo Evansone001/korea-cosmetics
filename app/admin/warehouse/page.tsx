@@ -266,10 +266,10 @@ export default function AdminWarehousePage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600">
-                      {product.b2c_retail_price ? `$${product.b2c_retail_price}` : '-'}
+                      {product.b2c_retail_price ? `KES ${product.b2c_retail_price}` : '-'}
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600">
-                      {product.b2b_wholesale_price ? `$${product.b2b_wholesale_price} (MOQ: {product.b2b_moq})` : '-'}
+                      {product.b2b_wholesale_price ? `KES ${product.b2b_wholesale_price} (MOQ: {product.b2b_moq})` : '-'}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -385,7 +385,7 @@ export default function AdminWarehousePage() {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  B2C Retail Price ($)
+                  B2C Retail Price (KES)
                 </label>
                 <input
                   type="number"
@@ -398,7 +398,7 @@ export default function AdminWarehousePage() {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  B2B Wholesale Price ($)
+                  B2B Wholesale Price (KES)
                 </label>
                 <input
                   type="number"
@@ -424,7 +424,7 @@ export default function AdminWarehousePage() {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Suggested Retail Price ($) *
+                  Suggested Retail Price (KES) *
                 </label>
                 <input
                   type="number"

@@ -32,6 +32,9 @@ function CallbackContent() {
           let redirectPath = '/'
           switch (response.user.role) {
             case 'admin':
+            case 'super_admin':
+              // Admins can access both admin and store sections
+              // Default to admin, but they can navigate to store if needed
               redirectPath = '/admin'
               break
             case 'seller':

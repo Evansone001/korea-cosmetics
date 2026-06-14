@@ -66,7 +66,19 @@ const ROLE_PERMISSIONS_FALLBACK = {
     permissions: []
 }
 
+// Helper: get current user id from JWT payload in cookie
+const getCurrentUserId = () => {
+    if (typeof document === 'undefined') return null
+    const token = document.cookie.split(';').find(c => c.trim().startsWith('auth-token='))?.split('=')[1]
+    if (!token) return null
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        return payload.sub || null
+    } catch { return null }
+}
+
 export default function AdminUsers() {
+    const currentAdminId = getCurrentUserId()
     const [searchQuery, setSearchQuery] = useState('')
     const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'seller' | 'customer'>('all')
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended' | 'banned'>('all')
@@ -642,57 +654,64 @@ export default function AdminUsers() {
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-2">
-                                            <button 
-                                                onClick={() => {
-                                                    setSelectedUser(user)
-                                                    setShowRoleModal(true)
-                                                }}
-                                                className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors"
-                                                title="Change Role"
-                                            >
-                                                <Edit2 className="w-4 h-4" />
-                                            </button>
-                                            {user.status === 'active' ? (
-                                                <button 
-                                                    onClick={() => handleStatusChange(user.id, 'suspended')}
-                                                    className="p-2 hover:bg-yellow-50 rounded-lg text-yellow-600 transition-colors"
-                                                    title="Suspend"
-                                                >
-                                                    <Clock className="w-4 h-4" />
-                                                </button>
-                                            ) : user.status === 'suspended' ? (
-                                                <button 
-                                                    onClick={() => handleStatusChange(user.id, 'active')}
-                                                    className="p-2 hover:bg-green-50 rounded-lg text-green-600 transition-colors"
-                                                    title="Activate"
-                                                >
-                                                    <Unlock className="w-4 h-4" />
-                                                </button>
-                                            ) : (
-                                                <button 
-                                                    onClick={() => handleStatusChange(user.id, 'active')}
-                                                    className="p-2 hover:bg-green-50 rounded-lg text-green-600 transition-colors"
-                                                    title="Unban"
-                                                >
-                                                    <Unlock className="w-4 h-4" />
-                                                </button>
+                                            {user.id !== currentAdminId && (
+                                                <>
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedUser(user)
+                                                            setShowRoleModal(true)
+                                                        }}
+                                                        className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors"
+                                                        title="Change Role"
+                                                    >
+                                                        <Edit2 className="w-4 h-4" />
+                                                    </button>
+                                                    {user.status === 'active' ? (
+                                                        <button
+                                                            onClick={() => handleStatusChange(user.id, 'suspended')}
+                                                            className="p-2 hover:bg-yellow-50 rounded-lg text-yellow-600 transition-colors"
+                                                            title="Suspend"
+                                                        >
+                                                            <Clock className="w-4 h-4" />
+                                                        </button>
+                                                    ) : user.status === 'suspended' ? (
+                                                        <button
+                                                            onClick={() => handleStatusChange(user.id, 'active')}
+                                                            className="p-2 hover:bg-green-50 rounded-lg text-green-600 transition-colors"
+                                                            title="Activate"
+                                                        >
+                                                            <Unlock className="w-4 h-4" />
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => handleStatusChange(user.id, 'active')}
+                                                            className="p-2 hover:bg-green-50 rounded-lg text-green-600 transition-colors"
+                                                            title="Unban"
+                                                        >
+                                                            <Unlock className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={() => handleStatusChange(user.id, user.status === 'banned' ? 'active' : 'banned')}
+                                                        className="p-2 hover:bg-red-50 rounded-lg text-red-600 transition-colors"
+                                                        title={user.status === 'banned' ? 'Unban' : 'Ban'}
+                                                    >
+                                                        <Ban className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteUser(user)}
+                                                        className="p-2 hover:bg-red-100 rounded-lg text-red-700 transition-colors"
+                                                        title="Delete User"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                        </svg>
+                                                    </button>
+                                                </>
                                             )}
-                                            <button 
-                                                onClick={() => handleStatusChange(user.id, user.status === 'banned' ? 'active' : 'banned')}
-                                                className="p-2 hover:bg-red-50 rounded-lg text-red-600 transition-colors"
-                                                title={user.status === 'banned' ? 'Unban' : 'Ban'}
-                                            >
-                                                <Ban className="w-4 h-4" />
-                                            </button>
-                                            <button 
-                                                onClick={() => handleDeleteUser(user)}
-                                                className="p-2 hover:bg-red-100 rounded-lg text-red-700 transition-colors"
-                                                title="Delete User"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                </svg>
-                                            </button>
+                                            {user.id === currentAdminId && (
+                                                <span className="text-xs text-slate-400 italic px-2">Current user</span>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
@@ -713,20 +732,30 @@ export default function AdminUsers() {
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
                         <h3 className="text-xl font-bold text-slate-800 mb-2">Change User Role</h3>
-                        <p className="text-slate-500 mb-6">
+                        <p className="text-slate-500 mb-4">
                             Select a new role for <span className="font-medium text-slate-800">{selectedUser.name}</span>
                         </p>
-                        
+
+                        {selectedUser.id === currentAdminId && (
+                            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                                You cannot change your own role.
+                            </div>
+                        )}
+
                         <div className="space-y-3 mb-6">
                             {Object.entries(ROLE_PERMISSIONS).map(([role, config]) => {
                                 const Icon = config.icon
+                                const disabled = selectedUser.id === currentAdminId
                                 return (
                                     <button
                                         key={role}
-                                        onClick={() => handleRoleChange(selectedUser.id, role as any)}
+                                        disabled={disabled}
+                                        onClick={() => !disabled && handleRoleChange(selectedUser.id, role as any)}
                                         className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all ${
-                                            selectedUser.role === role 
-                                                ? 'border-slate-900 bg-slate-50' 
+                                            disabled
+                                                ? 'opacity-50 cursor-not-allowed border-slate-100 bg-slate-50'
+                                                : selectedUser.role === role
+                                                ? 'border-slate-900 bg-slate-50'
                                                 : 'border-slate-200 hover:border-slate-300'
                                         }`}
                                     >
@@ -780,6 +809,12 @@ export default function AdminUsers() {
                             </p>
                         </div>
 
+                        {userToDelete.id === currentAdminId && (
+                            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                                You cannot delete your own account.
+                            </div>
+                        )}
+
                         <p className="text-sm text-slate-700 mb-3">
                             To confirm deletion, please type the user's full name below:
                         </p>
@@ -810,7 +845,7 @@ export default function AdminUsers() {
                             </button>
                             <button 
                                 onClick={executeDelete}
-                                disabled={confirmName !== userToDelete.name}
+                                disabled={confirmName !== userToDelete.name || userToDelete.id === currentAdminId}
                                 className="flex-1 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
                                 Delete User

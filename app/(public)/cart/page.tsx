@@ -12,7 +12,7 @@ import { apiClient } from "@/lib/api-client";
 
 export default function Cart() {
 
-    const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || '$';
+    const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || 'KES';
     
     const { cartItems } = useAppSelector(state => state.cart);
 

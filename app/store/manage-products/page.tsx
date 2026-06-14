@@ -649,7 +649,7 @@ export default function StoreManageProductsPage() {
                     
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Your Retail Price ($)
+                        Your Retail Price (KES)
                       </label>
                       <input
                         type="number"
@@ -751,7 +751,7 @@ export default function StoreManageProductsPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Price ($)
+                    Price (KES)
                   </label>
                   <input
                     type="number"

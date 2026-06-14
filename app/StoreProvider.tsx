@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Provider } from 'react-redux'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { store } from '../lib/store'
 import { useAppDispatch, useAppSelector } from '../lib/hooks'
 import { setUser, setLoading, setAuthChecked } from '../lib/features/auth/authSlice'
@@ -124,9 +125,20 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 }
 
 export default function StoreProvider({ children }: { children: React.ReactNode }) {
+  const [queryClient] = useState(() => new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 60 * 1000,
+        retry: 1,
+      },
+    },
+  }))
+
   return (
     <Provider store={store}>
-      <AuthInitializer>{children}</AuthInitializer>
+      <QueryClientProvider client={queryClient}>
+        <AuthInitializer>{children}</AuthInitializer>
+      </QueryClientProvider>
     </Provider>
   )
 }

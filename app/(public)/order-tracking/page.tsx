@@ -1,12 +1,16 @@
 'use client'
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
-import { Search, Package, Truck, CheckCircle, XCircle, Clock, MapPin, Phone, Mail, Calendar, RefreshCw, ArrowLeft } from 'lucide-react'
+import { Search, Package, Truck, CheckCircle, XCircle, Clock, MapPin, Phone, Mail, Calendar, RefreshCw, ArrowLeft, ExternalLink, Navigation } from 'lucide-react'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import toast from 'react-hot-toast'
 import React from 'react'
 import OrderTrackingWrapper from './OrderTrackingWrapper'
+import { apiClient } from '@/lib/api-client'
+
+const LiveMap = dynamic(() => import('@/components/LiveMap'), { ssr: false, loading: () => <div className="h-80 bg-gray-100 rounded-xl animate-pulse" /> })
 
 interface OrderTracking {
     id: string
@@ -29,6 +33,7 @@ interface OrderTracking {
     }
     shippingInfo?: {
         trackingNumber?: string
+        trackingUrl?: string
         carrier?: string
         estimatedDelivery?: string
         currentLocation?: {
@@ -37,6 +42,15 @@ interface OrderTracking {
             timestamp: string
         }
     }
+    liveLocation?: {
+        lat: number
+        lng: number
+        updated_at: string
+    } | null
+    destinationLat?: number
+    destinationLng?: number
+    shippingChannel?: string | null
+    carrierName?: string | null
     createdAt: string
     updatedAt: string
     totalAmount: number
@@ -58,6 +72,7 @@ function OrderTrackingContent() {
     const [orderData, setOrderData] = useState<OrderTracking | null>(null)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
     const orderNumberFromUrl = searchParams.get('order') || searchParams.get('tracking')
 
@@ -67,64 +82,76 @@ function OrderTrackingContent() {
         }
     }, [orderNumberFromUrl])
 
-    const fetchOrderTracking = async (orderNumber: string) => {
+    const mapDataFromResponse = (data: any): OrderTracking => ({
+        id: data.id,
+        orderNumber: data.id,
+        status: data.status,
+        items: (data.items || []).map((item: any) => ({
+            id: item.id || item.product_id,
+            name: item.name || item.product_name,
+            quantity: item.quantity,
+            price: item.price,
+            image: item.image || item.images?.[0],
+        })),
+        customerInfo: {
+            name: data.customer?.name || '',
+            email: data.customer?.email || '',
+            phone: data.customer?.phone || '',
+            address: data.shipping_address?.street || '',
+            city: data.shipping_address?.city || '',
+            country: data.shipping_address?.country || '',
+        },
+        shippingInfo: {
+            trackingNumber: data.tracking_number || undefined,
+            trackingUrl: data.tracking_url || undefined,
+            carrier: 'Boda Tracking',
+            estimatedDelivery: undefined,
+        },
+        liveLocation: data.live_location || null,
+        shippingChannel: data.shipping_channel || null,
+        carrierName: data.carrier_name || null,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+        totalAmount: data.total,
+    })
+
+    const fetchOrderTracking = async (orderId: string, silent = false) => {
         try {
-            setLoading(true)
-            setError(null)
+            if (!silent) { setLoading(true); setError(null) }
 
-            // Mock data - replace with actual API call
-            const mockOrderData: OrderTracking = {
-                id: '1',
-                orderNumber: orderNumber,
-                status: 'shipped',
-                items: [
-                    {
-                        id: '1',
-                        name: 'Korean Beauty Serum',
-                        quantity: 2,
-                        price: 89.99,
-                        image: '/api/placeholder/1'
-                    },
-                    {
-                        id: '2',
-                        name: 'Face Mask Collection',
-                        quantity: 1,
-                        price: 45.99,
-                        image: '/api/placeholder/2'
-                    }
-                ],
-                customerInfo: {
-                    name: 'Sarah Johnson',
-                    email: 'sarah.j@example.com',
-                    phone: '+254-712-345-678',
-                    address: '123 Beauty Street, Apt 4B',
-                    city: 'Nairobi',
-                    country: 'Kenya'
-                },
-                shippingInfo: {
-                    trackingNumber: 'KGL202405150001',
-                    carrier: 'Kenya Courier Service',
-                    estimatedDelivery: 'May 15, 2026',
-                    currentLocation: {
-                        city: 'Nairobi',
-                        country: 'Kenya',
-                        timestamp: '2026-05-14T10:30:00Z'
-                    }
-                },
-                createdAt: '2026-05-10T14:20:00Z',
-                updatedAt: '2026-05-14T09:15:00Z',
-                totalAmount: 225.97
+            const data = await apiClient.trackOrder(orderId)
+            const orderTracking = mapDataFromResponse(data)
+            setOrderData(orderTracking)
+
+            if (orderTracking.status === 'shipped') {
+                if (!pollIntervalRef.current) {
+                    pollIntervalRef.current = setInterval(() => {
+                        fetchOrderTracking(orderId, true)
+                    }, 10_000)
+                }
+            } else {
+                if (pollIntervalRef.current) {
+                    clearInterval(pollIntervalRef.current)
+                    pollIntervalRef.current = null
+                }
             }
-
-            setOrderData(mockOrderData)
-        } catch (error) {
-            console.error('Failed to fetch order tracking:', error)
-            setError('Failed to load order information')
-            toast.error('Unable to load order details')
+        } catch (error: any) {
+            if (!silent) {
+                console.error('Failed to fetch order tracking:', error)
+                const msg = error?.response?.data?.error || 'Order not found. Please check your order ID.'
+                setError(msg)
+                toast.error(msg)
+            }
         } finally {
-            setLoading(false)
+            if (!silent) setLoading(false)
         }
     }
+
+    useEffect(() => {
+        return () => {
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+        }
+    }, [])
 
     const handleTrackingSearch = () => {
         if (!trackingNumber.trim()) {
@@ -317,12 +344,54 @@ function OrderTrackingContent() {
                                 </div>
                             </div>
 
+                            {/* Live Driver Map */}
+                            {orderData.status === 'shipped' && orderData.liveLocation && (
+                                <div className="bg-white rounded-xl border-2 border-blue-200 overflow-hidden">
+                                    <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 border-b border-blue-200">
+                                        <span className="relative flex h-3 w-3">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-600"></span>
+                                        </span>
+                                        <Navigation size={15} className="text-blue-700" />
+                                        <span className="font-semibold text-blue-800 text-sm">Live Driver Location</span>
+                                        <span className="ml-auto text-xs text-blue-500">
+                                            Updated {orderData.liveLocation.updated_at ? new Date(orderData.liveLocation.updated_at).toLocaleTimeString() : '—'}
+                                        </span>
+                                    </div>
+                                    <LiveMap
+                                        driverLat={orderData.liveLocation.lat}
+                                        driverLng={orderData.liveLocation.lng}
+                                        updatedAt={orderData.liveLocation.updated_at}
+                                    />
+                                </div>
+                            )}
+
+                            {/* Shipped but no live location yet */}
+                            {orderData.status === 'shipped' && !orderData.liveLocation && (
+                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+                                    <Navigation size={18} className="text-amber-600 flex-shrink-0" />
+                                    <p className="text-sm text-amber-800">
+                                        Your order is on the way. Live driver location will appear here once the driver starts sharing their pin.
+                                    </p>
+                                </div>
+                            )}
+
                             {/* Shipping Information */}
                             {orderData.shippingInfo && (
                                 <div className="bg-blue-50 rounded-lg p-4">
                                     <h3 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
                                         <Truck size={16} />
                                         Shipping Information
+                                        {orderData.shippingChannel === 'courier' && (
+                                            <span className="ml-auto text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">
+                                                {orderData.carrierName ? `via ${orderData.carrierName}` : 'Courier'}
+                                            </span>
+                                        )}
+                                        {orderData.shippingChannel === 'own_driver' && (
+                                            <span className="ml-auto text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium flex items-center gap-1">
+                                                <Navigation size={10} /> Own Delivery
+                                            </span>
+                                        )}
                                     </h3>
                                     <div className="space-y-3">
                                         {orderData.shippingInfo.trackingNumber && (
@@ -353,6 +422,17 @@ function OrderTrackingContent() {
                                                     Updated: {new Date(orderData.shippingInfo.currentLocation.timestamp).toLocaleString()}
                                                 </p>
                                             </div>
+                                        )}
+                                        {orderData.shippingInfo.trackingUrl && (
+                                            <a
+                                                href={orderData.shippingInfo.trackingUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-2 mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium w-fit"
+                                            >
+                                                <ExternalLink size={14} />
+                                                Track on Boda Tracking
+                                            </a>
                                         )}
                                     </div>
                                 </div>

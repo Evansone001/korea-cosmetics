@@ -40,7 +40,7 @@ interface OrderItemProps {
 }
 
 const OrderItem = ({ order }: OrderItemProps) => {
-  const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || '$';
+  const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || 'KES';
   const [ratingModal, setRatingModal] = useState<{ orderId: string; productId: string } | null>(null);
 
   const { ratings } = useSelector((state: any) => state.rating);

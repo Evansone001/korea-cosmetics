@@ -4,7 +4,7 @@ import {
     Search, Filter, Package, Truck, CheckCircle, XCircle, Clock,
     MapPin, User, Calendar, DollarSign, MoreHorizontal, Eye,
     Download, Printer, ChevronDown, ArrowRight, Phone, Mail,
-    Box, ShoppingBag, AlertCircle, RotateCcw, UserCheck, Store
+    Box, ShoppingBag, AlertCircle, RotateCcw, Store, Copy, ExternalLink, Navigation
 } from 'lucide-react'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
@@ -39,7 +39,6 @@ interface Order {
     tax: number
     createdAt: string
     updatedAt: string
-    assignedTo?: string
     notes?: string
     trackingNumber?: string
     // Cancellation details
@@ -64,14 +63,6 @@ const PAYMENT_STATUSES = {
     refunded: { label: 'Refunded', color: 'text-gray-600', bg: 'bg-gray-50' }
 }
 
-// Sample delivery staff
-const DELIVERY_STAFF = [
-    { id: 'staff_1', name: 'Michael Johnson', phone: '+254 712 111 222', activeOrders: 3 },
-    { id: 'staff_2', name: 'Sarah Williams', phone: '+254 723 333 444', activeOrders: 5 },
-    { id: 'staff_3', name: 'David Brown', phone: '+254 734 555 666', activeOrders: 2 },
-    { id: 'staff_4', name: 'Emily Davis', phone: '+254 745 777 888', activeOrders: 4 },
-]
-
 export default function AdminOrders() {
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -80,9 +71,14 @@ export default function AdminOrders() {
     const [typeFilter, setTypeFilter] = useState<'all' | 'retail' | 'b2b'>('all')
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
     const [showOrderModal, setShowOrderModal] = useState(false)
-    const [showAssignModal, setShowAssignModal] = useState(false)
     const [showTrackingModal, setShowTrackingModal] = useState(false)
+    const [showStatusNoteModal, setShowStatusNoteModal] = useState(false)
     const [trackingNumber, setTrackingNumber] = useState('')
+    const [shipChannel, setShipChannel] = useState<'own_driver' | 'courier'>('own_driver')
+    const [shipCarrierName, setShipCarrierName] = useState('')
+    const [driverLink, setDriverLink] = useState<string | null>(null)
+    const [statusNote, setStatusNote] = useState('')
+    const [pendingStatusChange, setPendingStatusChange] = useState<{ orderId: string; newStatus: Order['status'] } | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
@@ -121,8 +117,8 @@ export default function AdminOrders() {
                         status: order.status,
                         paymentStatus: order.is_paid ? 'paid' : 'pending',
                         paymentMethod: order.payment_method || 'Unknown',
-                        total: order.total,
-                        subtotal: order.total,
+                        total: order.total ?? 0,
+                        subtotal: order.total ?? 0,
                         shipping: 0,
                         tax: 0,
                         createdAt: order.created_at,
@@ -135,6 +131,13 @@ export default function AdminOrders() {
             // Process B2B orders
             if (b2bResponse.orders) {
                 b2bResponse.orders.forEach((order: any) => {
+                    const normalizedItems = (order.items || []).map((item: any) => ({
+                        id: item.product_id || item.id || '',
+                        name: item.name || item.product_name || 'Unknown Product',
+                        quantity: item.quantity || 0,
+                        price: item.price || item.unit_price || 0,
+                        image: item.image || undefined
+                    }))
                     mappedOrders.push({
                         id: order.id,
                         orderNumber: `B2B-${order.id.slice(0, 8).toUpperCase()}`,
@@ -146,12 +149,12 @@ export default function AdminOrders() {
                             address: order.shipping_address?.street || '',
                             company: order.store_name || ''
                         },
-                        items: order.items || [],
+                        items: normalizedItems,
                         status: order.status,
                         paymentStatus: order.is_paid ? 'paid' : 'pending',
                         paymentMethod: order.payment_method || 'Unknown',
-                        total: order.total,
-                        subtotal: order.total,
+                        total: order.total ?? order.total_amount ?? 0,
+                        subtotal: order.total ?? order.total_amount ?? 0,
                         shipping: 0,
                         tax: 0,
                         createdAt: order.created_at,
@@ -179,9 +182,9 @@ export default function AdminOrders() {
         fetchOrders()
     }, [statusFilter])
 
-    const handleStatusChange = async (orderId: string, newStatus: Order['status']) => {
+    const handleStatusChange = async (orderId: string, newStatus: Order['status'], note?: string) => {
         try {
-            await apiClient.updateOrderStatus(orderId, newStatus)
+            await apiClient.updateOrderStatus(orderId, newStatus, note)
             toast.success(`Order status updated to ${newStatus}`)
             fetchOrders()
         } catch (error) {
@@ -190,26 +193,41 @@ export default function AdminOrders() {
         }
     }
 
-    const handleAssignDelivery = (orderId: string, staffId: string) => {
-        setOrders(prev => prev.map(order => 
-            order.id === orderId 
-                ? { ...order, assignedTo: staffId, status: 'processing', updatedAt: new Date().toISOString() }
-                : order
-        ))
-        setShowAssignModal(false)
-    }
-
-    const handleShipOrder = async (orderId: string, trackingNum: string) => {
+    const handleShipOrder = async (orderId: string) => {
         try {
-            await apiClient.fulfillOrder(orderId, trackingNum)
+            const order = orders.find(o => o.id === orderId)
+            if (order?.type === 'b2b') {
+                await apiClient.handleWarehouseOrderAction(orderId, 'ship', trackingNumber)
+            }
+            const res: any = await apiClient.shipOrder(orderId, {
+                shipping_channel: shipChannel,
+                tracking_number: trackingNumber.trim() || undefined,
+                carrier_name: shipCarrierName.trim() || undefined,
+            })
+            if (res?.driver_token) {
+                const link = `${window.location.origin}/driver/${orderId}?token=${res.driver_token}`
+                setDriverLink(link)
+            }
             toast.success('Order shipped successfully')
             fetchOrders()
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to ship order:', error)
-            toast.error('Failed to ship order')
+            const msg = error?.response?.data?.error || 'Failed to ship order'
+            toast.error(msg)
         }
-        setShowTrackingModal(false)
         setTrackingNumber('')
+    }
+
+    // Handle warehouse/B2B order actions (approve, deliver, etc.)
+    const handleWarehouseAction = async (orderId: string, action: string) => {
+        try {
+            await apiClient.handleWarehouseOrderAction(orderId, action)
+            toast.success(`Order ${action}d successfully`)
+            fetchOrders()
+        } catch (error) {
+            console.error(`Failed to ${action} order:`, error)
+            toast.error(`Failed to ${action} order`)
+        }
     }
 
     const filteredOrders = orders.filter(order => {
@@ -223,12 +241,6 @@ export default function AdminOrders() {
         const matchesType = typeFilter === 'all' || order.type === typeFilter
         return matchesSearch && matchesStatus && matchesPayment && matchesType
     })
-
-    const getAssignedStaffName = (staffId?: string) => {
-        if (!staffId) return 'Unassigned'
-        const staff = DELIVERY_STAFF.find(s => s.id === staffId)
-        return staff ? staff.name : 'Unknown'
-    }
 
     const StatusBadge = ({ status }: { status: Order['status'] }) => {
         const config = ORDER_STATUSES[status]
@@ -292,11 +304,11 @@ export default function AdminOrders() {
                         Retail Orders
                     </Link>
                     <Link 
-                        href="/admin/orders/b2b"
+                        href="/admin/wholesale-orders"
                         className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
                     >
                         <Store className="w-4 h-4" />
-                        B2B Orders
+                        Wholesale Orders
                     </Link>
                     <button className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">
                         <Printer className="w-4 h-4" />
@@ -393,28 +405,6 @@ export default function AdminOrders() {
                 </div>
             </div>
 
-            {/* Delivery Staff Status */}
-            <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6 shadow-sm">
-                <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                    <UserCheck className="w-5 h-5 text-blue-500" />
-                    Delivery Staff Status
-                </h3>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    {DELIVERY_STAFF.map(staff => (
-                        <div key={staff.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-medium">
-                                {staff.name.charAt(0)}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="font-medium text-slate-800 text-sm truncate">{staff.name}</p>
-                                <p className="text-xs text-slate-500">{staff.activeOrders} active orders</p>
-                            </div>
-                            <div className={`w-2 h-2 rounded-full ${staff.activeOrders < 5 ? 'bg-green-500' : 'bg-yellow-500'}`} />
-                        </div>
-                    ))}
-                </div>
-            </div>
-
             {/* Filters */}
             <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm">
                 <div className="flex flex-col lg:flex-row gap-4">
@@ -468,7 +458,6 @@ export default function AdminOrders() {
                                 <th className="px-6 py-4 text-left text-sm font-medium text-slate-700">Total</th>
                                 <th className="px-6 py-4 text-left text-sm font-medium text-slate-700">Status</th>
                                 <th className="px-6 py-4 text-left text-sm font-medium text-slate-700">Payment</th>
-                                <th className="px-6 py-4 text-left text-sm font-medium text-slate-700">Assigned</th>
                                 <th className="px-6 py-4 text-left text-sm font-medium text-slate-700">Date</th>
                                 <th className="px-6 py-4 text-left text-sm font-medium text-slate-700">Actions</th>
                             </tr>
@@ -525,18 +514,6 @@ export default function AdminOrders() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
-                                        {order.assignedTo ? (
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                                                    <User className="w-3 h-3 text-blue-600" />
-                                                </div>
-                                                <span className="text-sm text-slate-600">{getAssignedStaffName(order.assignedTo)}</span>
-                                            </div>
-                                        ) : (
-                                            <span className="text-xs text-slate-400">Unassigned</span>
-                                        )}
-                                    </td>
-                                    <td className="px-6 py-4">
                                         <p className="text-sm text-slate-600">
                                             {new Date(order.createdAt).toLocaleDateString()}
                                         </p>
@@ -559,19 +536,26 @@ export default function AdminOrders() {
                                             {order.status === 'pending' && (
                                                 <button 
                                                     onClick={() => {
-                                                        setSelectedOrder(order)
-                                                        setShowAssignModal(true)
+                                                        if (order.type === 'b2b') {
+                                                            handleWarehouseAction(order.id, 'approve')
+                                                        } else {
+                                                            handleStatusChange(order.id, 'processing')
+                                                        }
                                                     }}
                                                     className="p-2 hover:bg-blue-50 rounded-lg text-blue-600 transition-colors"
-                                                    title="Assign to Staff"
+                                                    title={order.type === 'b2b' ? 'Approve Order' : 'Start Processing'}
                                                 >
-                                                    <UserCheck className="w-4 h-4" />
+                                                    <Package className="w-4 h-4" />
                                                 </button>
                                             )}
                                             {order.status === 'processing' && (
                                                 <button 
                                                     onClick={() => {
                                                         setSelectedOrder(order)
+                                                        setShipChannel('own_driver')
+                                                        setShipCarrierName('')
+                                                        setTrackingNumber('')
+                                                        setDriverLink(null)
                                                         setShowTrackingModal(true)
                                                     }}
                                                     className="p-2 hover:bg-purple-50 rounded-lg text-purple-600 transition-colors"
@@ -582,7 +566,13 @@ export default function AdminOrders() {
                                             )}
                                             {order.status === 'shipped' && (
                                                 <button 
-                                                    onClick={() => handleStatusChange(order.id, 'delivered')}
+                                                    onClick={() => {
+                                                        if (order.type === 'b2b') {
+                                                            handleWarehouseAction(order.id, 'deliver')
+                                                        } else {
+                                                            handleStatusChange(order.id, 'delivered')
+                                                        }
+                                                    }}
                                                     className="p-2 hover:bg-green-50 rounded-lg text-green-600 transition-colors"
                                                     title="Mark as Delivered"
                                                 >
@@ -591,9 +581,16 @@ export default function AdminOrders() {
                                             )}
                                             {(order.status === 'pending' || order.status === 'processing') && (
                                                 <button 
-                                                    onClick={() => handleStatusChange(order.id, 'cancelled')}
+                                                    onClick={() => {
+                                                        if (order.type === 'b2b') {
+                                                            handleWarehouseAction(order.id, 'reject')
+                                                        } else {
+                                                            setPendingStatusChange({ orderId: order.id, newStatus: 'cancelled' })
+                                                            setShowStatusNoteModal(true)
+                                                        }
+                                                    }}
                                                     className="p-2 hover:bg-red-50 rounded-lg text-red-600 transition-colors"
-                                                    title="Cancel Order"
+                                                    title={order.type === 'b2b' ? 'Reject Order' : 'Cancel Order'}
                                                 >
                                                     <XCircle className="w-4 h-4" />
                                                 </button>
@@ -761,19 +758,6 @@ export default function AdminOrders() {
                                     </div>
                                 </div>
                             )}
-
-                            {/* Assigned Staff */}
-                            {selectedOrder.assignedTo && (
-                                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                                        <User className="w-5 h-5 text-blue-600" />
-                                    </div>
-                                    <div>
-                                        <p className="font-medium text-slate-800">Assigned to {getAssignedStaffName(selectedOrder.assignedTo)}</p>
-                                        <p className="text-xs text-slate-500">{DELIVERY_STAFF.find(s => s.id === selectedOrder.assignedTo)?.phone}</p>
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     </div>
                 </div>
@@ -787,85 +771,188 @@ export default function AdminOrders() {
                         <p className="text-slate-500 mb-6">
                             Enter tracking information for <span className="font-medium">{selectedOrder.orderNumber}</span>
                         </p>
+
+                        {!driverLink ? (
+                            <>
+                                {/* Channel selector */}
+                                <div className="grid grid-cols-2 gap-3 mb-4">
+                                    <button
+                                        onClick={() => setShipChannel('own_driver')}
+                                        className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-sm ${
+                                            shipChannel === 'own_driver'
+                                                ? 'border-purple-500 bg-purple-50 text-purple-700'
+                                                : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                                        }`}
+                                    >
+                                        <Navigation size={18} />
+                                        <span className="font-medium">Own Driver</span>
+                                        <span className="text-xs opacity-60">Live GPS pin</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setShipChannel('courier')}
+                                        className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-sm ${
+                                            shipChannel === 'courier'
+                                                ? 'border-purple-500 bg-purple-50 text-purple-700'
+                                                : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                                        }`}
+                                    >
+                                        <Truck size={18} />
+                                        <span className="font-medium">Courier</span>
+                                        <span className="text-xs opacity-60">Tracking #</span>
+                                    </button>
+                                </div>
+
+                                <div className="space-y-3 mb-5">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                                            Tracking Number {shipChannel === 'courier' ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="e.g., KEN123456789"
+                                            value={trackingNumber}
+                                            onChange={(e) => setTrackingNumber(e.target.value)}
+                                            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                        />
+                                    </div>
+                                    {shipChannel === 'courier' && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-2">Carrier Name (optional)</label>
+                                            <input
+                                                type="text"
+                                                placeholder="e.g. DHL, G4S, Sendy"
+                                                value={shipCarrierName}
+                                                onChange={(e) => setShipCarrierName(e.target.value)}
+                                                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => {
+                                            setShowTrackingModal(false)
+                                            setTrackingNumber('')
+                                            setShipCarrierName('')
+                                            setDriverLink(null)
+                                        }}
+                                        className="flex-1 py-2.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={() => handleShipOrder(selectedOrder.id)}
+                                        disabled={shipChannel === 'courier' && !trackingNumber.trim()}
+                                        className="flex-1 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    >
+                                        <Truck className="w-4 h-4" />
+                                        Mark as Shipped
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+                                    <p className="text-sm font-semibold text-green-800 mb-2">✓ Order shipped! Send this link to the driver:</p>
+                                    <div className="flex items-center gap-2 bg-white border border-green-300 rounded-lg px-3 py-2 mb-3">
+                                        <span className="text-xs text-slate-600 flex-1 truncate">{driverLink}</span>
+                                        <button
+                                            onClick={() => { navigator.clipboard.writeText(driverLink!); toast.success('Link copied!') }}
+                                            className="p-1 hover:bg-green-100 rounded"
+                                            title="Copy link"
+                                        >
+                                            <Copy size={14} className="text-green-700" />
+                                        </button>
+                                        <a href={driverLink} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-green-100 rounded">
+                                            <ExternalLink size={14} className="text-green-700" />
+                                        </a>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <a
+                                            href={`https://wa.me/?text=${encodeURIComponent(`Hi! Here is your delivery tracking link for order ${selectedOrder?.orderNumber}. Open this on your phone to share your live location with the customer: ${driverLink}`)}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex-1 flex items-center justify-center gap-2 py-2 bg-[#25D366] text-white rounded-lg hover:bg-[#1ebe5d] transition-colors text-sm font-medium"
+                                        >
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                                            Send via WhatsApp
+                                        </a>
+                                        <a
+                                            href={`sms:?body=${encodeURIComponent(`Delivery link for order ${selectedOrder?.orderNumber}: ${driverLink}`)}`}
+                                            className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                                        >
+                                            <Phone size={14} />
+                                            Send via SMS
+                                        </a>
+                                    </div>
+                                    <p className="text-xs text-green-600 mt-2">Driver opens the link on their phone to share live GPS location.</p>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setShowTrackingModal(false)
+                                        setDriverLink(null)
+                                    }}
+                                    className="w-full py-2.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors"
+                                >
+                                    Done
+                                </button>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Status Note Modal */}
+            {showStatusNoteModal && pendingStatusChange && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+                        <h3 className="text-xl font-bold text-slate-800 mb-2">
+                            {pendingStatusChange.newStatus === 'cancelled' ? 'Cancel Order' : 'Change Order Status'}
+                        </h3>
+                        <p className="text-slate-500 mb-6">
+                            {pendingStatusChange.newStatus === 'cancelled' 
+                                ? 'Add a reason for cancelling this order (optional)'
+                                : 'Add a note for this status change (optional)'}
+                        </p>
                         
                         <div className="space-y-4 mb-6">
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                                    Tracking Number
+                                    {pendingStatusChange.newStatus === 'cancelled' ? 'Reason' : 'Note'}
                                 </label>
-                                <input
-                                    type="text"
-                                    placeholder="e.g., KEN123456789"
-                                    value={trackingNumber}
-                                    onChange={(e) => setTrackingNumber(e.target.value)}
-                                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                <textarea
+                                    placeholder={pendingStatusChange.newStatus === 'cancelled' ? 'e.g., Out of stock, Customer request' : 'e.g., Priority shipment, Special handling'}
+                                    value={statusNote}
+                                    onChange={(e) => setStatusNote(e.target.value)}
+                                    rows={3}
+                                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
                                 />
-                                <p className="text-xs text-slate-500 mt-1">
-                                    Enter the courier tracking number for this shipment
-                                </p>
                             </div>
                         </div>
                         
                         <div className="flex gap-3">
                             <button 
                                 onClick={() => {
-                                    setShowTrackingModal(false)
-                                    setTrackingNumber('')
+                                    setShowStatusNoteModal(false)
+                                    setStatusNote('')
+                                    setPendingStatusChange(null)
                                 }}
                                 className="flex-1 py-2.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors"
                             >
                                 Cancel
                             </button>
                             <button 
-                                onClick={() => handleShipOrder(selectedOrder.id, trackingNumber)}
-                                disabled={!trackingNumber.trim()}
-                                className="flex-1 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                onClick={() => {
+                                    handleStatusChange(pendingStatusChange.orderId, pendingStatusChange.newStatus, statusNote)
+                                    setShowStatusNoteModal(false)
+                                    setStatusNote('')
+                                    setPendingStatusChange(null)
+                                }}
+                                className="flex-1 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
                             >
-                                <Truck className="w-4 h-4" />
-                                Mark as Shipped
+                                {pendingStatusChange.newStatus === 'cancelled' ? 'Cancel Order' : 'Confirm'}
                             </button>
                         </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Assign Staff Modal */}
-            {showAssignModal && selectedOrder && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
-                        <h3 className="text-xl font-bold text-slate-800 mb-2">Assign to Delivery Staff</h3>
-                        <p className="text-slate-500 mb-6">
-                            Select a staff member to handle order <span className="font-medium">{selectedOrder.orderNumber}</span>
-                        </p>
-                        
-                        <div className="space-y-3 mb-6">
-                            {DELIVERY_STAFF.map(staff => (
-                                <button
-                                    key={staff.id}
-                                    onClick={() => handleAssignDelivery(selectedOrder.id, staff.id)}
-                                    className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-slate-200 hover:border-blue-300 transition-all"
-                                >
-                                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-medium">
-                                        {staff.name.charAt(0)}
-                                    </div>
-                                    <div className="text-left flex-1">
-                                        <p className="font-medium text-slate-800">{staff.name}</p>
-                                        <p className="text-xs text-slate-500">{staff.phone}</p>
-                                        <p className={`text-xs mt-1 ${staff.activeOrders < 5 ? 'text-green-600' : 'text-yellow-600'}`}>
-                                            {staff.activeOrders} active orders
-                                        </p>
-                                    </div>
-                                    <ArrowRight className="w-5 h-5 text-slate-400" />
-                                </button>
-                            ))}
-                        </div>
-                        
-                        <button
-                            onClick={() => setShowAssignModal(false)}
-                            className="w-full py-2.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors"
-                        >
-                            Cancel
-                        </button>
                     </div>
                 </div>
             )}

@@ -57,16 +57,43 @@ const StoreLayout = ({ children }: StoreLayoutProps) => {
           rejection_reason: response.store.rejection_reason || null,
         })
       } else {
-        // User has seller role but no store - redirect to create store
-        console.log('[StoreLayout] User has no store, redirecting to create store')
-        router.push('/create-store')
+        // User has seller role but no store
+        // Only redirect to create-store if NOT an admin (admins can access without a store)
+        if (user?.role !== 'admin' && user?.role !== 'super_admin') {
+          console.log('[StoreLayout] User has no store, redirecting to create store')
+          router.push('/create-store')
+        } else {
+          console.log('[StoreLayout] Admin user without store - allowing access')
+          // For admin without store, set a special admin mode
+          setStoreInfo({
+            id: 'admin-mode',
+            name: 'Admin Dashboard',
+            username: 'admin',
+            logo: null,
+            status: 'active',
+            rejection_reason: null,
+          })
+        }
       }
     } catch (error: any) {
       console.log('[StoreLayout] No store found or error:', error)
-      // If 404, redirect to create store
+      // If 404, only redirect non-admin users to create store
       if (error?.message?.includes('404') || error?.status === 404) {
-        console.log('[StoreLayout] 404 error, redirecting to create store')
-        router.push('/create-store')
+        if (user?.role !== 'admin' && user?.role !== 'super_admin') {
+          console.log('[StoreLayout] 404 error, redirecting to create store')
+          router.push('/create-store')
+        } else {
+          console.log('[StoreLayout] Admin user without store - allowing access despite 404')
+          // For admin without store, set a special admin mode
+          setStoreInfo({
+            id: 'admin-mode',
+            name: 'Admin Dashboard',
+            username: 'admin',
+            logo: null,
+            status: 'active',
+            rejection_reason: null,
+          })
+        }
       }
     }
   }

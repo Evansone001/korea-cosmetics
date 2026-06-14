@@ -2,28 +2,45 @@
 
 import { notFound } from "next/navigation";
 import Image from "next/image";
-import { storesDummyData, productDummyData } from "@/assets/assets";
 import Link from "next/link";
 import { MapPin, Star, Package, ShieldCheck, Users } from "lucide-react";
 import ProductCard from "@/components/ProductCard";
 import { useParams } from "next/navigation";
-
-// Get store by username
-const getStoreByUsername = (username: string) => {
-  return storesDummyData.find(store => store.username === username);
-};
+import { useEffect, useState } from "react";
+import { apiClient } from "@/lib/api-client";
+import type { Store, Product } from "@/types";
 
 export default function StorePage() {
   const params = useParams();
   const username = params.username as string;
-  const store = getStoreByUsername(username);
-  
-  if (!store) {
-    notFound();
+  const [store, setStore] = useState<Store | null>(null);
+  const [storeProducts, setStoreProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [notFound404, setNotFound404] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const resp = await (apiClient as any).request(`/api/stores/public/${username}`) as any;
+        if (!resp?.store) { setNotFound404(true); return; }
+        setStore(resp.store);
+        setStoreProducts(resp.products ?? []);
+      } catch {
+        setNotFound404(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [username]);
+
+  if (loading) {
+    return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><p className="text-slate-500">Loading store...</p></div>;
   }
 
-  // Filter products by this store's ID
-  const storeProducts = productDummyData.filter(product => product.storeId === store.id);
+  if (notFound404 || !store) {
+    notFound();
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">

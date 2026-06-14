@@ -492,7 +492,7 @@ export default function ManageProductPage() {
                 <p className="text-xs text-slate-500 mt-1">Leave empty to use catalog description</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Price ($)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Price (KES)</label>
                 <input
                   type="number"
                   value={editForm.price}

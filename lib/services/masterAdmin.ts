@@ -69,9 +69,20 @@ export const masterAdminService = {
                 return mockPlatformMetrics
             }
 
+            // Check if backend returned an error
+            if (data.error) {
+                console.error('Backend returned error for platform metrics:', data.error)
+                return mockPlatformMetrics
+            }
+
+            // Log successful response for debugging
+            console.log('Platform metrics fetched:', { totalRevenue: data.totalRevenue, totalOrders: data.totalOrders })
+
             return data
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to fetch platform metrics:', error)
+            console.error('Error response:', error.response?.data)
+            console.error('Error status:', error.response?.status)
             return mockPlatformMetrics
         }
     },
@@ -114,9 +125,9 @@ export const masterAdminService = {
     },
 
     // ==================== DAILY TREND ====================
-    async getDailyTrend(days = 7): Promise<{ date: string; revenue: number; orders: number }[]> {
+    async getDailyTrend(days = 7, granularity = 'daily'): Promise<{ date: string; b2cRevenue: number; b2bRevenue: number; b2cOrders: number; b2bOrders: number }[]> {
         try {
-            const { data } = await axiosInstance.get(`/api/admin/metrics/platform/daily-trend?days=${days}`)
+            const { data } = await axiosInstance.get(`/api/admin/metrics/platform/daily-trend?days=${days}&granularity=${granularity}`)
             return Array.isArray(data?.trend) ? data.trend : []
         } catch (error) {
             console.error('Failed to fetch daily trend:', error)
@@ -333,6 +344,10 @@ const mockStores: StorePerformance[] = []
 const mockPlatformMetrics: PlatformMetrics = {
     totalRevenue: 0,
     totalOrders: 0,
+    b2cRevenue: 0,
+    b2bRevenue: 0,
+    b2cOrders: 0,
+    b2bOrders: 0,
     totalCustomers: 0,
     totalProducts: 0,
     activeStores: 0,

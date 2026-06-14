@@ -52,6 +52,9 @@ export default function ApplyReseller() {
     const router = useRouter()
     const { isAuthenticated, isLoading: authLoading } = useAppSelector(state => state?.auth || { isAuthenticated: false, isLoading: true })
 
+    const { user } = useAppSelector(state => state?.auth || { user: null })
+    const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
+
     // Check authentication and redirect if not logged in
     useEffect(() => {
         if (!authLoading) {
@@ -62,8 +65,16 @@ export default function ApplyReseller() {
     }, [isAuthenticated, authLoading, router])
 
     // If already has an application, redirect to status page
+    // Admins don't need reseller application — redirect to store or create-store
     useEffect(() => {
         if (!isAuthenticated) return
+
+        // Admins don't need to apply for reseller status
+        if (isAdmin) {
+            router.push('/create-store')
+            return
+        }
+
         const checkExisting = async () => {
             try {
                 const response: any = await apiClient.getMyResellerApplication()
@@ -84,7 +95,7 @@ export default function ApplyReseller() {
             }
         }
         checkExisting()
-    }, [isAuthenticated, router])
+    }, [isAuthenticated, isAdmin, router])
 
     // Show loading state while checking authentication
     if (authLoading) {

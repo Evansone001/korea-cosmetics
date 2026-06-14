@@ -46,6 +46,47 @@ export interface StoreOrder {
 
 export interface StoreOrdersResponse {
   orders?: StoreOrder[];
+  pagination?: {
+    total: number;
+    offset: number;
+    limit: number;
+    has_more: boolean;
+  };
+}
+
+export interface StoreCustomer {
+  user_id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  order_count: number;
+  total_spend: number;
+  last_order_at: string;
+  first_order_at: string;
+  vip_tier: 'new' | 'regular' | 'vip';
+  top_product?: { id: string; name: string; image?: string } | null;
+  note_count: number;
+}
+
+export interface StoreCustomerProfile {
+  customer: {
+    user_id: string;
+    name: string;
+    email: string;
+    phone?: string;
+    member_since?: string;
+    vip_tier: 'new' | 'regular' | 'vip';
+  };
+  stats: {
+    order_count: number;
+    total_spend: number;
+    avg_order_value: number;
+    first_order_at?: string;
+    last_order_at?: string;
+  };
+  top_product?: { id: string; name: string; image?: string } | null;
+  orders: any[];
+  notes: { id: string; note: string; created_at: string }[];
 }
 
 export interface InventoryItem {
@@ -605,8 +646,11 @@ class ApiClient {
     limit?: number;
     search?: string;
     category?: string;
+    brand?: string;
+    store_id?: string;
     min_price?: number;
     max_price?: number;
+    featured?: boolean;
     sort_by?: string;
     sort_order?: 'asc' | 'desc';
   } = {}): Promise<ProductsResponse> {
@@ -649,6 +693,16 @@ class ApiClient {
 
   async getStore(id: string) {
     return this.request(`/api/stores/${id}`);
+  }
+
+  async getStoreByUsername(username: string) {
+    const data = await this.request(`/api/stores/public/${username}`) as any;
+    return data?.store ?? null;
+  }
+
+  async getStoreProducts(storeId: string) {
+    const data = await this.request(`/api/stores/public/${storeId}`) as any;
+    return data?.products ?? [];
   }
 
   async createStore(storeData: any) {
@@ -778,6 +832,56 @@ class ApiClient {
     return this.request(`/api/orders/${orderId}`);
   }
 
+  async setOrderTracking(orderId: string, trackingNumber: string) {
+    return this.request(`/api/orders/${orderId}/tracking`, {
+      method: 'POST',
+      body: JSON.stringify({ tracking_number: trackingNumber })
+    });
+  }
+
+  async addOrderNote(orderId: string, note: string) {
+    return this.request(`/api/orders/${orderId}/notes`, {
+      method: 'POST',
+      body: JSON.stringify({ note })
+    });
+  }
+
+  async getStoreCustomers(params?: {
+    search?: string;
+    sort_by?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ customers: StoreCustomer[]; total: number; offset: number; limit: number }> {
+    const searchParams = new URLSearchParams();
+    if (params?.search) searchParams.append('search', params.search);
+    if (params?.sort_by) searchParams.append('sort_by', params.sort_by);
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.offset !== undefined) searchParams.append('offset', params.offset.toString());
+    const query = searchParams.toString();
+    return this.request(`/api/orders/store/customers${query ? `?${query}` : ''}`);
+  }
+
+  async getStoreCustomerProfile(userId: string): Promise<StoreCustomerProfile> {
+    return this.request(`/api/orders/store/customers/${userId}`);
+  }
+
+  async getCustomerNotes(userId: string): Promise<{ notes: { id: string; note: string; created_at: string }[] }> {
+    return this.request(`/api/orders/store/customers/${userId}/notes`);
+  }
+
+  async addCustomerNote(userId: string, note: string) {
+    return this.request(`/api/orders/store/customers/${userId}/notes`, {
+      method: 'POST',
+      body: JSON.stringify({ note })
+    });
+  }
+
+  async deleteCustomerNote(userId: string, noteId: string) {
+    return this.request(`/api/orders/store/customers/${userId}/notes/${noteId}`, {
+      method: 'DELETE'
+    });
+  }
+
   async getAdminWarehouseOrders(params: {
     status?: string;
     search?: string;
@@ -794,14 +898,65 @@ class ApiClient {
     return this.request<AdminWarehouseOrdersResponse>(`/api/admin/wholesale-orders${query ? `?${query}` : ''}`);
   }
 
-  async handleWarehouseOrderAction(orderId: string, action: string, trackingNumber?: string) {
+  async handleWarehouseOrderAction(
+    orderId: string,
+    action: string,
+    trackingNumber?: string,
+    carrier?: string,
+    riderCode?: string,
+    riderPhone?: string,
+    deliveryType?: string,
+    estimatedDeliveryTime?: string
+  ) {
     return this.request('/api/admin/wholesale-orders', {
       method: 'POST',
       body: JSON.stringify({
         orderId,
         action,
-        ...(trackingNumber && { trackingNumber })
+        ...(trackingNumber && { trackingNumber }),
+        ...(carrier && { carrier }),
+        ...(riderCode && { riderCode }),
+        ...(riderPhone && { riderPhone }),
+        ...(deliveryType && { deliveryType }),
+        ...(estimatedDeliveryTime && { estimatedDeliveryTime })
       })
+    });
+  }
+
+  async generateTrackingNumber(carrier: string, riderCode?: string): Promise<{
+    trackingNumber: string;
+    trackingUrl: string;
+    carrier: string;
+    carrierName: string;
+  }> {
+    return this.request('/api/admin/wholesale-orders/generate-tracking', {
+      method: 'POST',
+      body: JSON.stringify({ carrier, riderCode })
+    });
+  }
+
+  async getCarriers(): Promise<{
+    carriers: Array<{
+      code: string;
+      name: string;
+      description: string;
+      icon: string;
+      sameDay: boolean;
+      riderManagement: boolean;
+      coverage: string;
+    }>;
+  }> {
+    return this.request('/api/admin/wholesale-orders/carriers');
+  }
+
+  async shipOrder(orderId: string, data: {
+    shipping_channel: 'own_driver' | 'courier';
+    tracking_number?: string;
+    carrier_name?: string;
+  }) {
+    return this.request<any>(`/api/orders/${orderId}/ship`, {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
   }
 
@@ -888,21 +1043,6 @@ class ApiClient {
   }
 
   // Seller Customers endpoints
-  async getStoreCustomers(params: {
-    limit?: number;
-    offset?: number;
-    min_orders?: number;
-  } = {}) {
-    const searchParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined) {
-        searchParams.append(key, value.toString());
-      }
-    });
-    const query = searchParams.toString();
-    return this.request(`/api/customers/store${query ? `?${query}` : ''}`);
-  }
-
   async getCustomerDetails(customerId: string) {
     return this.request(`/api/customers/${customerId}`);
   }
@@ -939,6 +1079,18 @@ class ApiClient {
     });
   }
 
+  async submitRating(data: {
+    product_id: string
+    order_id: string
+    rating: number
+    review?: string
+  }) {
+    return this.request('/api/ratings', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
   // Seller Wholesale endpoints
   async getWholesaleTiers() {
     return this.request('/api/wholesale/tiers');
@@ -973,6 +1125,19 @@ class ApiClient {
     } catch (error: any) {
       if (error?.response?.status === 404 || error?.response?.status === 401 || error?.message?.includes('No store found')) {
         return null
+      }
+      throw error
+    }
+  }
+
+  async getSellerStatus() {
+    try {
+      const { data } = await axiosInstance.get('/api/seller/status')
+      return data
+    } catch (error: any) {
+      if (error?.response?.status === 403) {
+        // Not a seller/admin
+        return { canAccess: false, error: 'Seller access required' }
       }
       throw error
     }
@@ -1251,6 +1416,12 @@ class ApiClient {
     });
   }
 
+  async disableWarehouseProduct(productId: string) {
+    return this.request(`/api/admin/warehouse/${productId}/disable`, {
+      method: 'POST',
+    });
+  }
+
   // ==================== STORE CATALOG & PURCHASE API ====================
 
   async getStoreCatalog(params?: { category?: string; search?: string; limit?: number; offset?: number }): Promise<StoreCatalogResponse> {
@@ -1428,6 +1599,11 @@ class ApiClient {
     });
   }
 
+  // Public order tracking (no auth)
+  async trackOrder(orderId: string) {
+    return this.request<any>(`/api/orders/track/${orderId}`);
+  }
+
   // Customer orders endpoints
   async getMyOrders(params?: { status?: string; limit?: number }) {
     const queryParams = new URLSearchParams();
@@ -1438,10 +1614,10 @@ class ApiClient {
     return this.request<{ orders: any[]; count: number }>(`/api/orders/my-orders${queryString ? `?${queryString}` : ''}`);
   }
 
-  async updateOrderStatus(orderId: string, status: string) {
+  async updateOrderStatus(orderId: string, status: string, note?: string) {
     return this.request(`/api/orders/${orderId}/status`, {
       method: 'PUT',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, note }),
     });
   }
 

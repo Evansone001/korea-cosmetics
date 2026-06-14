@@ -32,10 +32,19 @@ const ProductCard = ({ product }: ProductCardProps) => {
     // Calculate savings percentage
     const savingsPercent = product.mrp ? Math.round(((product.mrp - product.price) / product.mrp) * 100) : 0;
 
+    const outOfStock = product.inStock === false;
+
     return (
-        <div className='group bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-slate-100 flex flex-col h-full'>
+        <div className={`group bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-slate-100 flex flex-col h-full${outOfStock ? ' opacity-80' : ''}`}>
             {/* Image Section */}
             <Link href={`/product/${product.slug ?? product.id}`} className='relative block'>
+                {outOfStock && (
+                    <div className='absolute inset-0 z-20 flex items-center justify-center bg-white/60 backdrop-blur-[1px]'>
+                        <span className='bg-slate-700 text-white text-xs px-3 py-1.5 rounded-full font-semibold tracking-wide shadow'>
+                            Out of Stock
+                        </span>
+                    </div>
+                )}
                 {badge && (
                     <div className='absolute top-3 left-3 z-10 flex flex-col gap-2'>
                         <span className={`bg-gradient-to-r ${badge.class} text-white text-xs px-3 py-1 rounded-full font-medium shadow-sm`}>
@@ -150,13 +159,20 @@ const ProductCard = ({ product }: ProductCardProps) => {
 
                 {/* Action Buttons */}
                 <div className='flex gap-2 mt-auto'>
-                    <Link
-                        href={`/product/${product.slug ?? product.id}`}
-                        className='flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white py-2.5 rounded-lg hover:from-pink-600 hover:to-rose-600 transition-all text-xs font-semibold text-center flex items-center justify-center gap-1 shadow-sm hover:shadow-md'
-                    >
-                        <ShoppingBagIcon size={14} />
-                        Buy
-                    </Link>
+                    {outOfStock ? (
+                        <span className='flex-1 bg-slate-100 text-slate-400 py-2.5 rounded-lg text-xs font-semibold text-center flex items-center justify-center gap-1 cursor-not-allowed'>
+                            <ShoppingBagIcon size={14} />
+                            Notify Me
+                        </span>
+                    ) : (
+                        <Link
+                            href={`/product/${product.slug ?? product.id}`}
+                            className='flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white py-2.5 rounded-lg hover:from-pink-600 hover:to-rose-600 transition-all text-xs font-semibold text-center flex items-center justify-center gap-1 shadow-sm hover:shadow-md'
+                        >
+                            <ShoppingBagIcon size={14} />
+                            Buy
+                        </Link>
+                    )}
                 </div>
             </div>
         </div>

@@ -635,7 +635,7 @@ export default function AddProductPage() {
             {/* Price */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">
-                Selling Price ($) <span className="text-red-500">*</span>
+                Selling Price (KES) <span className="text-red-500">*</span>
                 {validation.price?.hint && (
                   <div className="text-xs text-slate-500 mt-1">
                     💡 {validation.price.hint}
@@ -669,7 +669,7 @@ export default function AddProductPage() {
             {/* MRP */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">
-                MRP / Original Price ($)
+                MRP / Original Price (KES)
               </label>
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />

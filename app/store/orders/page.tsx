@@ -18,7 +18,10 @@ import {
   Clock,
   XCircle,
   MoreHorizontal,
-  X
+  X,
+  Copy,
+  ExternalLink,
+  Navigation
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
@@ -72,12 +75,21 @@ const getValidTransitions = (currentStatus: Order['status']): Order['status'][] 
 export default function StoreOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showShipModal, setShowShipModal] = useState(false);
+  const [shipChannel, setShipChannel] = useState<'own_driver' | 'courier'>('own_driver');
+  const [shipTrackingNumber, setShipTrackingNumber] = useState('');
+  const [shipCarrierName, setShipCarrierName] = useState('');
+  const [driverLink, setDriverLink] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'customer' | 'wholesale'>('customer');
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const LIMIT = 50;
   const [stats, setStats] = useState({
     totalOrders: 0,
     totalRevenue: 0,
@@ -88,26 +100,29 @@ export default function StoreOrdersPage() {
   });
 
   useEffect(() => {
-    fetchOrders();
+    setOffset(0);
+    fetchOrders(0, false);
     fetchStats();
   }, [statusFilter, activeTab]);
 
-  // Polling for real-time updates
+  // Polling for real-time updates (first page only)
   useEffect(() => {
     const interval = setInterval(() => {
-      fetchOrders();
+      fetchOrders(0, false);
       fetchStats();
     }, 30000);
     return () => clearInterval(interval);
   }, [statusFilter, activeTab]);
 
   // FIXED: Handles both customer and wholesale order structures
-  const fetchOrders = async () => {
+  const fetchOrders = async (pageOffset: number, append: boolean = false) => {
     try {
-      setLoading(true);
+      if (append) setIsLoadingMore(true);
+      else setLoading(true);
+
       const response = activeTab === 'customer'
-        ? await apiClient.getStoreOrders({ status: statusFilter || undefined, limit: 50 })
-        : await apiClient.getWholesaleOrders({ status: statusFilter || undefined, limit: 50 });
+        ? await apiClient.getStoreOrders({ status: statusFilter || undefined, limit: LIMIT, offset: pageOffset })
+        : await apiClient.getWholesaleOrders({ status: statusFilter || undefined, limit: LIMIT, offset: pageOffset });
 
       const transformedOrders: Order[] = (response?.orders || []).map((order: any) => {
         // Handle different field names (wholesale vs customer)
@@ -163,12 +178,18 @@ export default function StoreOrdersPage() {
         };
       });
 
-      setOrders(transformedOrders);
+      if (append) {
+        setOrders(prev => [...prev, ...transformedOrders]);
+      } else {
+        setOrders(transformedOrders);
+      }
+      setHasMore(response?.pagination?.has_more ?? false);
     } catch (error) {
       console.error('Failed to fetch orders:', error);
       toast.error('Failed to load orders');
     } finally {
       setLoading(false);
+      setIsLoadingMore(false);
     }
   };
 
@@ -232,6 +253,18 @@ export default function StoreOrdersPage() {
 
   const handleStatusUpdate = async (newStatus: Order['status']) => {
     if (!selectedOrder) return;
+    if (activeTab === 'wholesale') return; // wholesale status is admin-controlled
+
+    // 'shipped' transition requires shipping channel selection
+    if (newStatus === 'shipped') {
+      setShowUpdateModal(false);
+      setShipChannel('own_driver');
+      setShipTrackingNumber('');
+      setShipCarrierName('');
+      setDriverLink(null);
+      setShowShipModal(true);
+      return;
+    }
 
     try {
       await apiClient.updateOrderStatus(selectedOrder.id, newStatus);
@@ -249,6 +282,31 @@ export default function StoreOrdersPage() {
       console.error('Failed to update order status:', error);
       const errorMessage = error?.response?.data?.error || error?.message || error?.error || 'Failed to update order status';
       toast.error(errorMessage);
+    }
+  };
+
+  const handleShipOrder = async () => {
+    if (!selectedOrder) return;
+    try {
+      const res: any = await apiClient.shipOrder(selectedOrder.id, {
+        shipping_channel: shipChannel,
+        tracking_number: shipTrackingNumber.trim() || undefined,
+        carrier_name: shipCarrierName.trim() || undefined,
+      });
+      setOrders(prev => prev.map(o =>
+        o.id === selectedOrder.id ? { ...o, status: 'shipped', updatedAt: new Date().toISOString() } : o
+      ));
+      toast.success('Order shipped!');
+      if (res?.driver_token) {
+        const link = `${window.location.origin}/driver/${selectedOrder.id}?token=${res.driver_token}`;
+        setDriverLink(link);
+      } else {
+        setShowShipModal(false);
+        setSelectedOrder(null);
+      }
+    } catch (error: any) {
+      const msg = error?.response?.data?.error || error?.message || 'Failed to ship order';
+      toast.error(msg);
     }
   };
 
@@ -372,7 +430,7 @@ export default function StoreOrdersPage() {
             </div>
             <div>
               <p className="text-2xl font-bold text-slate-900">
-                {activeTab === 'customer' ? '$' : 'KES '}{stats.totalRevenue.toFixed(0)}
+                KES {stats.totalRevenue.toFixed(0)}
               </p>
               <p className="text-sm text-slate-500">{activeTab === 'customer' ? 'Revenue' : 'Cost'}</p>
             </div>
@@ -434,7 +492,7 @@ export default function StoreOrdersPage() {
                       </span>
                     </div>
                     <p className="text-sm text-slate-500 mt-1">
-                      {order.customerName} • {order.items.length} item{order.items.length > 1 ? 's' : ''} • {activeTab === 'customer' ? '$' : 'KES '}{order.total.toFixed(2)}
+                      {order.customerName} • {order.items.length} item{order.items.length > 1 ? 's' : ''} • KES {order.total.toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -508,10 +566,10 @@ export default function StoreOrdersPage() {
                           </div>
                           <div>
                             <p className="font-medium text-slate-900">{item.productName}</p>
-                            <p className="text-sm text-slate-500">Qty: {item.quantity} × {activeTab === 'customer' ? '$' : 'KES '}{item.unitPrice.toFixed(2)}</p>
+                            <p className="text-sm text-slate-500">Qty: {item.quantity} × KES {item.unitPrice.toFixed(2)}</p>
                           </div>
                         </div>
-                        <p className="font-medium text-slate-900">{activeTab === 'customer' ? '$' : 'KES '}{item.total.toFixed(2)}</p>
+                        <p className="font-medium text-slate-900">KES {item.total.toFixed(2)}</p>
                       </div>
                     ))}
                   </div>
@@ -522,26 +580,26 @@ export default function StoreOrdersPage() {
                   <div className="w-full md:w-72 space-y-2 text-sm">
                     <div className="flex justify-between text-slate-600">
                       <span>Subtotal</span>
-                      <span>{activeTab === 'customer' ? '$' : 'KES '}{order.subtotal.toFixed(2)}</span>
+                      <span>KES {order.subtotal.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-slate-600">
                       <span>Shipping</span>
-                      <span>{activeTab === 'customer' ? '$' : 'KES '}{order.shipping.toFixed(2)}</span>
+                      <span>KES {order.shipping.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-slate-600">
                       <span>Tax</span>
-                      <span>{activeTab === 'customer' ? '$' : 'KES '}{order.tax.toFixed(2)}</span>
+                      <span>KES {order.tax.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between font-semibold text-slate-900 text-base pt-2 border-t border-pink-100">
                       <span>Total</span>
-                      <span>{activeTab === 'customer' ? '$' : 'KES '}{order.total.toFixed(2)}</span>
+                      <span>KES {order.total.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Actions */}
                 <div className="flex gap-3 pt-2">
-                  {order.status !== 'delivered' && order.status !== 'cancelled' && (
+                  {activeTab === 'customer' && order.status !== 'delivered' && order.status !== 'cancelled' && (
                     <button
                       onClick={() => {
                         setSelectedOrder(order);
@@ -551,6 +609,11 @@ export default function StoreOrdersPage() {
                     >
                       Update Status
                     </button>
+                  )}
+                  {activeTab === 'wholesale' && order.status !== 'delivered' && order.status !== 'cancelled' && (
+                    <p className="text-sm text-slate-500 bg-slate-50 px-3 py-2 rounded-lg">
+                      Status updates for warehouse purchases are managed by the platform admin.
+                    </p>
                   )}
                   {order.notes && (
                     <p className="text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg flex-1">
@@ -562,6 +625,22 @@ export default function StoreOrdersPage() {
             )}
           </div>
         ))}
+
+        {hasMore && !searchQuery && (
+          <div className="flex justify-center pt-4">
+            <button
+              onClick={() => {
+                const nextOffset = offset + LIMIT;
+                setOffset(nextOffset);
+                fetchOrders(nextOffset, true);
+              }}
+              disabled={isLoadingMore}
+              className="px-6 py-2.5 bg-white border border-pink-200 text-pink-600 rounded-lg hover:bg-pink-50 transition-colors text-sm font-medium disabled:opacity-50"
+            >
+              {isLoadingMore ? 'Loading...' : 'Load More'}
+            </button>
+          </div>
+        )}
 
         {filteredOrders.length === 0 && (
           <div className="text-center py-12">
@@ -576,6 +655,146 @@ export default function StoreOrdersPage() {
           </div>
         )}
       </div>
+
+      {/* Ship Order Modal */}
+      {showShipModal && selectedOrder && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-slate-800 mb-1">Ship Order</h3>
+            <p className="text-slate-500 text-sm mb-5">
+              Choose how you are delivering <span className="font-medium">{selectedOrder.id}</span>
+            </p>
+
+            {!driverLink ? (
+              <>
+                {/* Channel selector */}
+                <div className="grid grid-cols-2 gap-3 mb-5">
+                  <button
+                    onClick={() => setShipChannel('own_driver')}
+                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                      shipChannel === 'own_driver'
+                        ? 'border-pink-500 bg-pink-50 text-pink-700'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    <Navigation size={22} />
+                    <span className="text-sm font-medium">Own Driver / Boda</span>
+                    <span className="text-xs opacity-70">Live GPS pin</span>
+                  </button>
+                  <button
+                    onClick={() => setShipChannel('courier')}
+                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                      shipChannel === 'courier'
+                        ? 'border-pink-500 bg-pink-50 text-pink-700'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    <Truck size={22} />
+                    <span className="text-sm font-medium">3rd-Party Courier</span>
+                    <span className="text-xs opacity-70">Tracking number</span>
+                  </button>
+                </div>
+
+                {/* Fields */}
+                <div className="space-y-3 mb-5">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Tracking Number {shipChannel === 'courier' ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. KEN123456789"
+                      value={shipTrackingNumber}
+                      onChange={e => setShipTrackingNumber(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-400 text-sm"
+                    />
+                  </div>
+                  {shipChannel === 'courier' && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Carrier Name (optional)</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. DHL, G4S, Sendy"
+                        value={shipCarrierName}
+                        onChange={e => setShipCarrierName(e.target.value)}
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-400 text-sm"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setShowShipModal(false); setSelectedOrder(null); }}
+                    className="flex-1 py-2.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleShipOrder}
+                    disabled={shipChannel === 'courier' && !shipTrackingNumber.trim()}
+                    className="flex-1 py-2.5 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
+                  >
+                    <Truck size={15} />
+                    Mark as Shipped
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+                  <p className="text-sm font-semibold text-green-800 mb-2">✓ Order shipped! Send this link to the driver:</p>
+                  <div className="flex items-center gap-2 bg-white border border-green-300 rounded-lg px-3 py-2 mb-3">
+                    <span className="text-xs text-slate-600 flex-1 truncate">{driverLink}</span>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(driverLink!); toast.success('Link copied!'); }}
+                      className="p-1 hover:bg-green-100 rounded"
+                      title="Copy"
+                    >
+                      <Copy size={14} className="text-green-700" />
+                    </button>
+                    <a href={driverLink} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-green-100 rounded">
+                      <ExternalLink size={14} className="text-green-700" />
+                    </a>
+                  </div>
+                  <div className="flex gap-2">
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent(`Hi! Here is your delivery tracking link for order ${selectedOrder?.id}. Open this on your phone to share your live location with the customer: ${driverLink}`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 flex items-center justify-center gap-2 py-2 bg-[#25D366] text-white rounded-lg hover:bg-[#1ebe5d] transition-colors text-sm font-medium"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                      WhatsApp
+                    </a>
+                    <a
+                      href={`sms:?body=${encodeURIComponent(`Delivery link for order ${selectedOrder?.id}: ${driverLink}`)}`}
+                      className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                    >
+                      <Phone size={14} />
+                      SMS
+                    </a>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(driverLink!); toast.success('Link copied!'); }}
+                      className="flex items-center justify-center gap-1 px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm"
+                    >
+                      <Copy size={14} />
+                      Copy
+                    </button>
+                  </div>
+                  <p className="text-xs text-green-600 mt-2">Driver opens the link on their phone to share live GPS location.</p>
+                </div>
+                <button
+                  onClick={() => { setShowShipModal(false); setDriverLink(null); setSelectedOrder(null); }}
+                  className="w-full py-2.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors text-sm font-medium"
+                >
+                  Done
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Update Status Modal */}
       {showUpdateModal && selectedOrder && (
@@ -609,7 +828,7 @@ export default function StoreOrdersPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-600">Total:</span>
-                  <span className="font-medium text-slate-900">{activeTab === 'customer' ? '$' : 'KES '}{selectedOrder.total.toFixed(2)}</span>
+                  <span className="font-medium text-slate-900">KES {selectedOrder.total.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-600">Items:</span>

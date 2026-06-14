@@ -325,7 +325,7 @@ export default function StoreDashboard() {
         },
         {
             title: 'Total Revenue',
-            value: `$${(dashboardMetrics?.metrics?.total_revenue?.current_month || 0).toLocaleString()}`,
+            value: `KES ${(dashboardMetrics?.metrics?.total_revenue?.current_month || 0).toLocaleString()}`,
             icon: DollarSignIcon,
             bgColor: 'bg-gradient-to-br from-pink-600 to-rose-600',
             change: dashboardMetrics?.metrics?.total_revenue?.change_label || 'No data'

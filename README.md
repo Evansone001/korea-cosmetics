@@ -88,7 +88,7 @@
    JWT_SECRET="your-super-secret-jwt-key"
    
    # App Config
-   NEXT_PUBLIC_CURRENCY_SYMBOL="$"
+   NEXT_PUBLIC_CURRENCY_SYMBOL="KES"
    NEXT_PUBLIC_APP_NAME="KoreaCosmetics' Hub"
    ```
 

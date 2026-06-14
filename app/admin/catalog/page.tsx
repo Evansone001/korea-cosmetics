@@ -253,9 +253,9 @@ export default function ProductCatalogPage() {
   // Add to Warehouse handlers
   const openWarehouseModal = (product: Product) => {
     setWarehouseProduct(product);
-    // Pre-fill with product data if available
+    // Pre-fill pricing data only - stock is managed in warehouse page
     setWarehouseFormData({
-      warehouse_stock: 100,
+      warehouse_stock: 0, // Stock managed in warehouse page, not here
       b2c_retail_price: product.price ? (product.price * 1.2).toFixed(2) : '', // 20% markup default
       b2b_wholesale_price: product.price ? (product.price * 0.8).toFixed(2) : '', // 20% discount default
       b2b_moq: 10,
@@ -276,7 +276,7 @@ export default function ProductCatalogPage() {
         category: warehouseProduct.category,
         brand: warehouseProduct.brand || warehouseProduct.manufacturer,
         customer_type: warehouseFormData.customer_type,
-        warehouse_stock: warehouseFormData.warehouse_stock,
+        // NOTE: warehouse_stock is NOT set here - it's managed exclusively in warehouse page
         b2c_retail_price: warehouseFormData.b2c_retail_price ? parseFloat(warehouseFormData.b2c_retail_price) : null,
         b2b_wholesale_price: warehouseFormData.b2b_wholesale_price ? parseFloat(warehouseFormData.b2b_wholesale_price) : null,
         b2b_moq: warehouseFormData.b2b_moq,
@@ -284,7 +284,7 @@ export default function ProductCatalogPage() {
       };
       
       await apiClient.createWarehouseProduct(data);
-      toast.success(`${warehouseProduct.name} added to warehouse`);
+      toast.success(`${warehouseProduct.name} enabled for warehouse. Set stock quantities in Warehouse page.`);
       setWarehouseModalOpen(false);
       setWarehouseProduct(null);
       await fetchProducts();
@@ -294,15 +294,6 @@ export default function ProductCatalogPage() {
       // Handle specific error types
       if (error.message?.includes('already in warehouse')) {
         toast.error('This product is already in the warehouse');
-      } else if (error.message?.includes('Insufficient catalog stock')) {
-        const stockMatch = error.message.match(/Available: (\d+), Requested: (\d+)/);
-        if (stockMatch) {
-          const available = stockMatch[1];
-          const requested = stockMatch[2];
-          toast.error(`Only ${available} units available in catalog. Cannot transfer ${requested} units.`);
-        } else {
-          toast.error('Insufficient stock available in catalog');
-        }
       } else if (error.message?.includes('Unauthorized')) {
         toast.error('You are not authorized to add products to warehouse');
       } else if (error.message?.includes('Network Error')) {
@@ -314,6 +305,22 @@ export default function ProductCatalogPage() {
       }
     } finally {
       setAddingToWarehouse(false);
+    }
+  };
+
+  // Remove from Warehouse handler
+  const handleRemoveFromWarehouse = async (product: Product) => {
+    if (!confirm(`Remove "${product.name}" from warehouse?\n\nThis will disable warehouse features but the product will remain in the catalog. Stock quantities will be preserved but hidden.`)) {
+      return;
+    }
+    
+    try {
+      await apiClient.disableWarehouseProduct(product.id);
+      toast.success(`${product.name} removed from warehouse`);
+      await fetchProducts();
+    } catch (error: any) {
+      console.error('Failed to remove from warehouse:', error);
+      toast.error(error.message || 'Failed to remove product from warehouse');
     }
   };
 
@@ -553,10 +560,19 @@ export default function ProductCatalogPage() {
                         Add to Warehouse
                       </button>
                     ) : (
-                      <span className="flex items-center gap-1 text-sm text-slate-500">
-                        <Warehouse size={14} />
-                        In Warehouse
-                      </span>
+                      <>
+                        <span className="flex items-center gap-1 text-sm text-blue-600">
+                          <Warehouse size={14} />
+                          In Warehouse
+                        </span>
+                        <button
+                          onClick={() => handleRemoveFromWarehouse(product)}
+                          className="flex items-center gap-1 text-sm text-amber-600 hover:text-amber-700"
+                        >
+                          <X size={14} />
+                          Remove from Warehouse
+                        </button>
+                      </>
                     )}
                     <button
                       onClick={() => setEditingProduct(product)}
@@ -596,55 +612,33 @@ export default function ProductCatalogPage() {
                 </button>
               </div>
               <p className="text-sm text-slate-500 mt-1">
-                Configure warehouse inventory settings for <span className="font-medium text-slate-700">{warehouseProduct.name}</span>
+                Enable warehouse features for <span className="font-medium text-slate-700">{warehouseProduct.name}</span>
+              </p>
+              <p className="text-xs text-slate-400 mt-2">
+                Stock quantities will be managed in the Warehouse page after enabling.
               </p>
             </div>
 
             <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Stock to Move to Warehouse *
-                  </label>
-                  <input
-                    type="number"
-                    value={warehouseFormData.warehouse_stock}
-                    onChange={(e) => {
-                      const value = parseInt(e.target.value) || 0;
-                      const maxStock = warehouseProduct.stock_quantity || 0;
-                      if (value <= maxStock) {
-                        setWarehouseFormData(prev => ({ ...prev, warehouse_stock: value }));
-                      }
-                    }}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    min="0"
-                    max={warehouseProduct.stock_quantity || 0}
-                  />
-                  <p className="text-xs text-slate-400 mt-1">
-                    Available catalog stock: <span className="font-medium text-emerald-600">{warehouseProduct.stock_quantity || 0}</span> units
-                  </p>
-                  <p className="text-xs text-slate-400 mt-1">Amount to transfer from catalog to warehouse</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Customer Type *
-                  </label>
-                  <select
-                    value={warehouseFormData.customer_type}
-                    onChange={(e) => setWarehouseFormData(prev => ({ ...prev, customer_type: e.target.value as 'B2C' | 'B2B' | 'BOTH' }))}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  >
-                    <option value="BOTH">Both (B2C & B2B)</option>
-                    <option value="B2C">B2C Only</option>
-                    <option value="B2B">B2B Only</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Customer Type *
+                </label>
+                <select
+                  value={warehouseFormData.customer_type}
+                  onChange={(e) => setWarehouseFormData(prev => ({ ...prev, customer_type: e.target.value as 'B2C' | 'B2B' | 'BOTH' }))}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="BOTH">Both (B2C & B2B)</option>
+                  <option value="B2C">B2C Only</option>
+                  <option value="B2B">B2B Only</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
-                    B2C Retail Price ($)
+                    B2C Retail Price (KES)
                   </label>
                   <input
                     type="number"
@@ -658,7 +652,7 @@ export default function ProductCatalogPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
-                    B2B Wholesale Price ($)
+                    B2B Wholesale Price (KES)
                   </label>
                   <input
                     type="number"
@@ -696,7 +690,7 @@ export default function ProductCatalogPage() {
               </button>
               <button
                 onClick={handleAddToWarehouse}
-                disabled={addingToWarehouse || warehouseFormData.warehouse_stock <= 0}
+                disabled={addingToWarehouse}
                 className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {addingToWarehouse ? (
@@ -704,7 +698,7 @@ export default function ProductCatalogPage() {
                 ) : (
                   <Warehouse size={18} />
                 )}
-                {addingToWarehouse ? 'Adding...' : 'Add to Warehouse'}
+                {addingToWarehouse ? 'Enabling...' : 'Enable Warehouse'}
               </button>
             </div>
           </div>

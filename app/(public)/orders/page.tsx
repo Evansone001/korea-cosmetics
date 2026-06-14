@@ -103,7 +103,7 @@ export default function Orders() {
         }
     }
 
-    const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || '$'
+    const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || 'KES'
 
     const handleCancelOrder = async () => {
         if (!cancelReason) {
@@ -554,13 +554,13 @@ export default function Orders() {
                             {trackingOrder.trackingNumber && (
                                 <div className="border-t border-slate-200 pt-4">
                                     <a 
-                                        href={`https://tracking.example.com/${trackingOrder.trackingNumber}`}
+                                        href={`https://bodatracking.co.ke/track/${trackingOrder.trackingNumber}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="flex items-center justify-center gap-2 w-full py-3 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium"
                                     >
                                         <ExternalLink className="w-4 h-4" />
-                                        Track on Courier Website
+                                        Track on Boda Tracking
                                     </a>
                                 </div>
                             )}

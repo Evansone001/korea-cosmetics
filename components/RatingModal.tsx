@@ -4,6 +4,9 @@ import { Star } from 'lucide-react';
 import React, { useState } from 'react'
 import { XIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useDispatch } from 'react-redux';
+import { addRating } from '@/lib/features/rating/ratingSlice';
+import { apiClient } from '@/lib/api-client';
 
 interface RatingModalData {
   orderId: string
@@ -16,16 +19,36 @@ interface RatingModalProps {
 }
 
 const RatingModal = ({ ratingModal, setRatingModal }: RatingModalProps) => {
+  const dispatch = useDispatch();
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState('');
 
   const handleSubmit = async () => {
-    if (rating < 0 || rating > 5) {
-      return toast('Please select a rating');
+    if (rating < 1 || rating > 5) {
+      toast.error('Please select a star rating');
+      throw new Error('invalid rating');
     }
-    if (review.trim().length < 5) {
-      return toast('write a short review');
-    }
+
+    if (!ratingModal) throw new Error('no modal data');
+
+    const result = await apiClient.submitRating({
+      product_id: ratingModal.productId,
+      order_id: ratingModal.orderId,
+      rating,
+      review: review.trim() || undefined,
+    }) as any;
+
+    dispatch(addRating({
+      id: result.rating.id,
+      rating: result.rating.rating,
+      review: result.rating.review,
+      productId: ratingModal.productId,
+      orderId: ratingModal.orderId,
+      user: { name: '' },
+      createdAt: result.rating.created_at,
+      updatedAt: result.rating.updated_at,
+      product: { name: '', category: '', id: ratingModal.productId },
+    }));
 
     setRatingModal(null);
   }
@@ -53,7 +76,14 @@ const RatingModal = ({ ratingModal, setRatingModal }: RatingModalProps) => {
           value={review}
           onChange={(e) => setReview(e.target.value)}
         ></textarea>
-        <button onClick={e => toast.promise(handleSubmit(), { loading: 'Submitting...' })} className='w-full bg-green-500 text-white py-2 rounded-md hover:bg-green-600 transition'>
+        <button
+          onClick={() => toast.promise(handleSubmit(), {
+            loading: 'Submitting...',
+            success: 'Review submitted!',
+            error: (err) => err?.message !== 'invalid rating' && err?.message !== 'no modal data' ? 'Failed to submit review' : '',
+          })}
+          className='w-full bg-green-500 text-white py-2 rounded-md hover:bg-green-600 transition'
+        >
           Submit Rating
         </button>
       </div>

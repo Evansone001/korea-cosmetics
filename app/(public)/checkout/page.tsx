@@ -59,7 +59,7 @@ export default function CheckoutPage() {
     const [promoCode, setPromoCode] = useState('');
     const [discount, setDiscount] = useState(0);
 
-    const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || '$';
+    const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || 'KES';
     const shipping = totalPrice > 500 ? 0 : 50;
     const finalTotal = totalPrice + shipping - discount;
 
@@ -179,12 +179,18 @@ export default function CheckoutPage() {
             });
             
             const data = await response.json();
-            
+
             if (!response.ok) {
                 throw new Error(data.error || 'Failed to place order');
             }
-            
-            toast.success('Order placed successfully!');
+
+            // Backend returns { orders: [...] } — one entry per store in the cart
+            const orders: any[] = data.orders ?? (data.order ? [data.order] : []);
+            if (orders.length > 1) {
+                toast.success(`${orders.length} orders placed — one per store in your cart!`);
+            } else {
+                toast.success('Order placed successfully!');
+            }
             router.push('/orders');
         } catch (error) {
             console.error('Order placement error:', error);

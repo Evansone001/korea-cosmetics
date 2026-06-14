@@ -1,9 +1,8 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
-import { productDummyData } from '@/assets/assets'
 import type { ProductState, Product } from '@/types'
 
 const initialState: ProductState = {
-    list: productDummyData,
+    list: [],
 }
 
 const productSlice = createSlice({

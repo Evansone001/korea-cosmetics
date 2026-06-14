@@ -10,7 +10,7 @@ interface OrderSummaryProps {
 }
 
 const OrderSummary = ({ totalPrice, items }: OrderSummaryProps) => {
-    const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || '$';
+    const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || 'KES';
     const [promoCode, setPromoCode] = useState('');
     
     const totalItems = items.reduce((acc, item) => acc + item.quantity, 0);

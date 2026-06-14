@@ -79,25 +79,13 @@ function ShopContent() {
                 }
 
                 const response = await apiClient.getProducts(params)
-                const backendUrl = process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000';
-                console.log('Backend URL:', backendUrl);
-                const products = (response.products || []).map((product: any) => {
-                    const transformedImages = (product.images || []).map((img: string) => {
-                        if (img.startsWith('/uploads/')) {
-                            const fullUrl = `${backendUrl}${img}`;
-                            console.log('Transformed image:', img, '->', fullUrl);
-                            return fullUrl;
-                        }
-                        console.log('Image already full URL:', img);
-                        return img;
-                    });
-                    console.log('Product images:', product.name, transformedImages);
-                    return {
-                        ...product,
-                        images: transformedImages
-                    };
-                });
-                console.log('All products with transformed images:', products);
+                const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+                const products = (response.products || []).map((product: any) => ({
+                    ...product,
+                    images: (product.images || []).map((img: string) =>
+                        img.startsWith('/uploads/') ? `${backendUrl}${img}` : img
+                    )
+                }));
                 setProducts(products)
             } catch (err) {
                 console.error('Failed to fetch products:', err)

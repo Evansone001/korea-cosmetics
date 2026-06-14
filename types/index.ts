@@ -79,6 +79,7 @@ export interface Rating {
     image?: string | StaticImageData;
   };
   productId: string;
+  orderId: string;
   createdAt: string;
   updatedAt: string;
   product: {

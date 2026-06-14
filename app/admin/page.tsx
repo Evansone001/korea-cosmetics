@@ -2,6 +2,9 @@
 import { useEffect, useState } from 'react'
 import Loading from '@/components/Loading'
 import { masterAdminService } from '@/lib/services/masterAdmin'
+import { KpiCard } from '@/components/admin/KpiCard'
+import { InsightPanel } from '@/components/admin/InsightPanel'
+import DateRangePicker from '@/components/admin/DateRangePicker'
 import { 
     StorePerformance, 
     PlatformMetrics, 
@@ -18,7 +21,8 @@ import {
     ThumbsUp, ThumbsDown, AlertTriangle, RefreshCw, Send, Bot,
     Smile, Frown, Meh, Search, Lightbulb, X, Building2, Crown,
     MapPin, Activity as ActivityIcon, Eye, TrendingUpIcon, TrendingDownIcon,
-    BarChart3, PieChartIcon, Users2, CreditCard, Target, Zap, Globe
+    BarChart3, PieChartIcon, Users2, CreditCard, Target, Zap, Globe,
+    Layers, TrendingUp as TrendUp
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -29,13 +33,21 @@ export default function AdminDashboard() {
     const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || 'KES'
     const [loading, setLoading] = useState(true)
     const [timeRange, setTimeRange] = useState('7d')
+    const [granularity, setGranularity] = useState<'daily' | 'monthly' | 'yearly'>('daily')
     
     // Master Admin State - Single source of truth
     const [stores, setStores] = useState<StorePerformance[]>([])
     const [platformMetrics, setPlatformMetrics] = useState<PlatformMetrics | null>(null)
     const [healthScores, setHealthScores] = useState<StoreHealthScore[]>([])
     const [alerts, setAlerts] = useState<PlatformAlert[]>([])
-    const [dailyTrend, setDailyTrend] = useState<{ date: string; revenue: number; orders: number }[]>([])
+    const [dailyTrend, setDailyTrend] = useState<{ date: string; b2cRevenue: number; b2bRevenue: number; b2cOrders: number; b2bOrders: number }[]>([])
+    
+    // Chart view mode: combined, b2c, b2b
+    const [chartView, setChartView] = useState<'combined' | 'b2c' | 'b2b'>('combined')
+    
+    // Chart-specific time range and granularity
+    const [chartTimeRange, setChartTimeRange] = useState('7d')
+    const [chartGranularity, setChartGranularity] = useState<'daily' | 'monthly' | 'yearly'>('daily')
 
     // Generate category distribution from real store data
     const categoryData = platformMetrics ? [
@@ -54,7 +66,7 @@ export default function AdminDashboard() {
         growth: store.trends.revenueChange || (Math.random() * 20 - 5)
     }))
 
-    const timeRangeDays: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30, '90d': 90 }
+    const timeRangeDays: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30, '90d': 90, '6m': 180, '1y': 365, '2y': 730 }
 
     useEffect(() => {
         const fetchData = async () => {
@@ -66,7 +78,7 @@ export default function AdminDashboard() {
                     masterAdminService.getPlatformMetrics(),
                     masterAdminService.getStoreHealthScores(),
                     masterAdminService.getPlatformAlerts(),
-                    masterAdminService.getDailyTrend(days)
+                    masterAdminService.getDailyTrend(days, granularity)
                 ])
 
                 setStores(storeData)
@@ -81,10 +93,30 @@ export default function AdminDashboard() {
             }
         }
         fetchData()
-    }, [timeRange])
+    }, [timeRange, granularity])
 
-    // Use real daily trend data from backend
-    const chartData = dailyTrend
+    // Separate effect for chart-specific data
+    const [chartTrendData, setChartTrendData] = useState<{ date: string; b2cRevenue: number; b2bRevenue: number; b2cOrders: number; b2bOrders: number }[]>([])
+    
+    useEffect(() => {
+        const fetchChartData = async () => {
+            try {
+                const days = timeRangeDays[chartTimeRange] ?? 7
+                const trendData = await masterAdminService.getDailyTrend(days, chartGranularity)
+                setChartTrendData(trendData)
+            } catch (error) {
+                console.error('Failed to fetch chart data:', error)
+            }
+        }
+        fetchChartData()
+    }, [chartTimeRange, chartGranularity])
+
+    // Use real daily trend data from backend - add computed total fields
+    const chartData = chartTrendData.map(day => ({
+        ...day,
+        totalRevenue: (day.b2cRevenue || 0) + (day.b2bRevenue || 0),
+        totalOrders: (day.b2cOrders || 0) + (day.b2bOrders || 0)
+    }))
 
     // AI Assistant State (for floating chatbot widget)
     const [chatOpen, setChatOpen] = useState(false)
@@ -132,17 +164,16 @@ export default function AdminDashboard() {
                     <p className="text-slate-500 mt-1">Welcome back! Here's what's happening with your store.</p>
                 </div>
                 <div className="mt-4 sm:mt-0 flex items-center gap-3">
-                    <span className="text-sm text-slate-500">Last updated: {new Date().toLocaleTimeString()}</span>
-                    <select 
-                        value={timeRange} 
-                        onChange={(e) => setTimeRange(e.target.value)}
-                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value="24h">Last 24 hours</option>
-                        <option value="7d">Last 7 days</option>
-                        <option value="30d">Last 30 days</option>
-                        <option value="90d">Last 90 days</option>
-                    </select>
+                    <span className="text-sm text-slate-500 hidden sm:inline">Last updated: {new Date().toLocaleTimeString()}</span>
+                    <DateRangePicker 
+                        onRangeChange={(days) => {
+                            const rangeMap: Record<number, string> = { 1: '24h', 7: '7d', 30: '30d', 90: '90d', 180: '6m', 365: '1y', 730: '2y' }
+                            setTimeRange(rangeMap[days] || '7d')
+                        }}
+                        onGranularityChange={setGranularity}
+                        currentRange={timeRange}
+                        currentGranularity={granularity}
+                    />
                 </div>
             </div>
 
@@ -185,133 +216,61 @@ export default function AdminDashboard() {
                 </div>
             </div>
 
-            {/* Key Performance Metrics - Enhanced with Intelligence */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
-                {/* Revenue Card - Primary Metric */}
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100 hover:shadow-lg transition-all duration-300 hover:scale-105 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-blue-200/20 to-transparent rounded-full -mr-10 -mt-10" />
-                    <div className="relative">
-                        <div className="flex items-start justify-between mb-4">
-                            <div className="p-3 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl shadow-lg">
-                                <DollarSign className="w-6 h-6 text-white" />
-                            </div>
-                            <div className={`flex items-center text-sm font-medium px-2 py-1 rounded-full ${
-                                trends.revenue.isPositive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                            }`}>
-                                {trends.revenue.isPositive ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
-                                {Math.abs(trends.revenue.value)}%
-                            </div>
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-blue-600 mb-1">Total Revenue</p>
-                            <h3 className="text-2xl font-bold text-slate-800">
-                                {currency}{(platformMetrics?.totalRevenue || 0).toLocaleString()}
-                            </h3>
-                            <div className="flex items-center gap-2 mt-2">
-                                <p className="text-xs text-slate-500">Platform-wide</p>
-                                {platformMetrics?.platformGrowth && platformMetrics.platformGrowth > 15 && (
-                                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
-                                        High Growth
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Orders Card - Secondary Metric */}
-                <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl p-6 border border-emerald-100 hover:shadow-lg transition-all duration-300 hover:scale-105 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-emerald-200/20 to-transparent rounded-full -mr-10 -mt-10" />
-                    <div className="relative">
-                        <div className="flex items-start justify-between mb-4">
-                            <div className="p-3 bg-gradient-to-r from-emerald-500 to-green-600 rounded-xl shadow-lg">
-                                <ShoppingBag className="w-6 h-6 text-white" />
-                            </div>
-                            <div className={`flex items-center text-sm font-medium px-2 py-1 rounded-full ${
-                                trends.orders.isPositive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                            }`}>
-                                {trends.orders.isPositive ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
-                                {Math.abs(trends.orders.value)}%
-                            </div>
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-emerald-600 mb-1">Total Orders</p>
-                            <h3 className="text-2xl font-bold text-slate-800">
-                                {(platformMetrics?.totalOrders || 0).toLocaleString()}
-                            </h3>
-                            <div className="flex items-center gap-2 mt-2">
-                                <p className="text-xs text-slate-500">All stores</p>
-                                {platformMetrics && platformMetrics.totalOrders > 500 && (
-                                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
-                                        High Volume
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Active Stores Card - Operational Health */}
-                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-100 hover:shadow-lg transition-all duration-300 hover:scale-105 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-purple-200/20 to-transparent rounded-full -mr-10 -mt-10" />
-                    <div className="relative">
-                        <div className="flex items-start justify-between mb-4">
-                            <div className="p-3 bg-gradient-to-r from-purple-500 to-pink-600 rounded-xl shadow-lg">
-                                <Store className="w-6 h-6 text-white" />
-                            </div>
-                            <div className="flex items-center text-sm font-medium px-2 py-1 rounded-full bg-blue-100 text-blue-700">
-                                <Building2 className="w-3 h-3 mr-1" />
-                                Active
-                            </div>
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-purple-600 mb-1">Active Stores</p>
-                            <h3 className="text-2xl font-bold text-slate-800">
-                                {platformMetrics?.activeStores || '0'}
-                            </h3>
-                            <div className="flex items-center gap-2 mt-2">
-                                <p className="text-xs text-slate-500">{platformMetrics?.suspendedStores || 0} suspended</p>
-                                {platformMetrics && platformMetrics.suspendedStores === 0 && (
-                                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
-                                        All Active
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Customers Card - Growth Indicator */}
-                <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-6 border border-orange-100 hover:shadow-lg transition-all duration-300 hover:scale-105 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-orange-200/20 to-transparent rounded-full -mr-10 -mt-10" />
-                    <div className="relative">
-                        <div className="flex items-start justify-between mb-4">
-                            <div className="p-3 bg-gradient-to-r from-orange-500 to-amber-600 rounded-xl shadow-lg">
-                                <Users className="w-6 h-6 text-white" />
-                            </div>
-                            <div className={`flex items-center text-sm font-medium px-2 py-1 rounded-full ${
-                                trends.customers.isPositive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                            }`}>
-                                {trends.customers.isPositive ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
-                                {Math.abs(trends.customers.value)}%
-                            </div>
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-orange-600 mb-1">Total Customers</p>
-                            <h3 className="text-2xl font-bold text-slate-800">
-                                {(platformMetrics?.totalCustomers || 0).toLocaleString()}
-                            </h3>
-                            <div className="flex items-center gap-2 mt-2">
-                                <p className="text-xs text-slate-500">Platform-wide</p>
-                                {platformMetrics && platformMetrics.totalCustomers > 500 && (
-                                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
-                                        Growing
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            {/* Executive KPI Cards - Modern Management Dashboard */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
+                <KpiCard
+                    title="Total Revenue"
+                    value={`${currency}${(platformMetrics?.totalRevenue || 0).toLocaleString()}`}
+                    change={platformMetrics?.platformGrowth}
+                    changeLabel="vs last mo"
+                    sparklineData={dailyTrend.map(d => ({ value: (d.b2cRevenue || 0) + (d.b2bRevenue || 0) }))}
+                    color="blue"
+                    icon={<DollarSign size={18} />}
+                />
+                <KpiCard
+                    title="B2B Revenue"
+                    value={`${currency}${(platformMetrics?.b2bRevenue || 0).toLocaleString()}`}
+                    change={platformMetrics?.b2bRevenue && platformMetrics?.b2bRevenue > 0 ? 100 : 0}
+                    changeLabel="wholesale"
+                    sparklineData={dailyTrend.map(d => ({ value: d.b2bRevenue || 0 }))}
+                    color="indigo"
+                    icon={<Layers size={18} />}
+                />
+                <KpiCard
+                    title="B2C Revenue"
+                    value={`${currency}${(platformMetrics?.b2cRevenue || 0).toLocaleString()}`}
+                    change={0}
+                    changeLabel="retail"
+                    sparklineData={dailyTrend.map(d => ({ value: d.b2cRevenue || 0 }))}
+                    color="emerald"
+                    icon={<ShoppingBag size={18} />}
+                />
+                <KpiCard
+                    title="Total Orders"
+                    value={`${(platformMetrics?.totalOrders || 0).toLocaleString()}`}
+                    change={platformMetrics?.totalOrders && platformMetrics.totalOrders > 5 ? 15 : 0}
+                    sparklineData={dailyTrend.map(d => ({ value: (d.b2cOrders || 0) + (d.b2bOrders || 0) }))}
+                    color="purple"
+                    icon={<TrendUp size={18} />}
+                />
+                <KpiCard
+                    title="Active Stores"
+                    value={`${platformMetrics?.activeStores || 0}`}
+                    change={0}
+                    changeLabel="stores"
+                    sparklineData={undefined}
+                    color="amber"
+                    icon={<Store size={18} />}
+                />
+                <KpiCard
+                    title="Customers"
+                    value={`${(platformMetrics?.totalCustomers || 0).toLocaleString()}`}
+                    change={platformMetrics?.recentSignups && platformMetrics.recentSignups > 0 ? 5 : 0}
+                    changeLabel="new"
+                    sparklineData={undefined}
+                    color="emerald"
+                    icon={<Users size={18} />}
+                />
             </div>
 
             {/* Enhanced Charts Row */}
@@ -324,16 +283,55 @@ export default function AdminDashboard() {
                                 <BarChart3 className="w-5 h-5 text-blue-600" />
                                 Revenue & Orders Trend
                             </h3>
-                            <p className="text-sm text-slate-500">Daily performance metrics</p>
+                            <p className="text-sm text-slate-500">Performance metrics</p>
                         </div>
-                        <div className="flex items-center gap-4 text-sm">
-                            <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full bg-gradient-to-r from-blue-500 to-blue-600" />
-                                <span className="text-slate-600">Revenue</span>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <DateRangePicker 
+                                onRangeChange={(days) => {
+                                    const rangeMap: Record<number, string> = { 1: '24h', 7: '7d', 30: '30d', 90: '90d', 180: '6m', 365: '1y', 730: '2y' }
+                                    setChartTimeRange(rangeMap[days] || '7d')
+                                }}
+                                onGranularityChange={setChartGranularity}
+                                currentRange={chartTimeRange}
+                                currentGranularity={chartGranularity}
+                            />
+                            {/* View Toggle */}
+                            <div className="flex bg-slate-100 rounded-lg p-1">
+                                {(['combined', 'b2c', 'b2b'] as const).map((view) => (
+                                    <button
+                                        key={view}
+                                        onClick={() => setChartView(view)}
+                                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                                            chartView === view
+                                                ? 'bg-white text-slate-800 shadow-sm'
+                                                : 'text-slate-500 hover:text-slate-700'
+                                        }`}
+                                    >
+                                        {view === 'combined' ? 'Combined' : view === 'b2c' ? 'B2C Only' : 'B2B Only'}
+                                    </button>
+                                ))}
                             </div>
-                            <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-500 to-green-600" />
-                                <span className="text-slate-600">Orders</span>
+                            
+                            {/* Legend - Dynamic based on view */}
+                            <div className="flex items-center gap-2 text-xs ml-2">
+                                {chartView === 'combined' && (
+                                    <>
+                                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500" />Revenue</span>
+                                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />Orders</span>
+                                    </>
+                                )}
+                                {chartView === 'b2c' && (
+                                    <>
+                                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sky-500" />B2C Rev</span>
+                                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400" />B2C Orders</span>
+                                    </>
+                                )}
+                                {chartView === 'b2b' && (
+                                    <>
+                                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500" />B2B Rev</span>
+                                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-600" />B2B Orders</span>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -341,16 +339,31 @@ export default function AdminDashboard() {
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={chartData}>
                                 <defs>
-                                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                    <linearGradient id="colorB2CRevenue" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.3}/>
+                                        <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0}/>
+                                    </linearGradient>
+                                    <linearGradient id="colorB2BRevenue" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
+                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                                    </linearGradient>
+                                    <linearGradient id="colorTotalRevenue" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
+                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                                 <XAxis 
                                     dataKey="date" 
                                     tick={{ fontSize: 12, fill: '#64748b' }}
-                                    tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                    tickFormatter={(value) => {
+                                        if (chartGranularity === 'yearly') {
+                                            return new Date(value).toLocaleDateString('en-US', { year: 'numeric' })
+                                        } else if (chartGranularity === 'monthly') {
+                                            return new Date(value).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
+                                        }
+                                        return new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                                    }}
                                     stroke="#cbd5e1"
                                 />
                                 <YAxis 
@@ -367,77 +380,114 @@ export default function AdminDashboard() {
                                 />
                                 <Tooltip
                                     contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                    formatter={(value: number, name: string) => [
-                                        name === 'revenue' ? `KES ${(value || 0).toLocaleString()}` : `${value || 0} orders`,
-                                        name === 'revenue' ? 'Revenue' : 'Orders'
-                                    ]}
+                                    formatter={(value: number, name: string) => {
+                                        const labels: Record<string, string> = {
+                                            'totalRevenue': 'Total Revenue',
+                                            'totalOrders': 'Total Orders',
+                                            'b2cRevenue': 'B2C Revenue',
+                                            'b2bRevenue': 'B2B Revenue',
+                                            'b2cOrders': 'B2C Orders',
+                                            'b2bOrders': 'B2B Orders'
+                                        }
+                                        if (name.includes('Revenue')) {
+                                            return [`KES ${(value || 0).toLocaleString()}`, labels[name] || name]
+                                        }
+                                        return [`${value || 0} orders`, labels[name] || name]
+                                    }}
                                     labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
                                 />
-                                <Area 
-                                    yAxisId="left"
-                                    type="monotone" 
-                                    dataKey="revenue" 
-                                    stroke="#3b82f6" 
-                                    strokeWidth={3}
-                                    fillOpacity={1} 
-                                    fill="url(#colorRevenue)" 
-                                />
-                                <Line
-                                    yAxisId="right"
-                                    type="monotone" 
-                                    dataKey="orders" 
-                                    stroke="#10b981" 
-                                    strokeWidth={3}
-                                    dot={{ fill: '#10b981', strokeWidth: 2, r: 5 }}
-                                    activeDot={{ r: 7 }}
-                                />
+                                {/* Combined View - Total Revenue + Total Orders */}
+                                {chartView === 'combined' && (
+                                    <>
+                                        <Area 
+                                            yAxisId="left"
+                                            type="monotone" 
+                                            dataKey="totalRevenue" 
+                                            stroke="#6366f1" 
+                                            strokeWidth={2}
+                                            fillOpacity={1} 
+                                            fill="url(#colorB2BRevenue)" 
+                                        />
+                                        <Line
+                                            yAxisId="right"
+                                            type="monotone" 
+                                            dataKey="totalOrders" 
+                                            stroke="#10b981" 
+                                            strokeWidth={2}
+                                            dot={{ fill: '#10b981', strokeWidth: 1, r: 3 }}
+                                            activeDot={{ r: 5 }}
+                                        />
+                                    </>
+                                )}
+                                
+                                {/* B2C Only View */}
+                                {chartView === 'b2c' && (
+                                    <>
+                                        <Area 
+                                            yAxisId="left"
+                                            type="monotone" 
+                                            dataKey="b2cRevenue" 
+                                            stroke="#0ea5e9" 
+                                            strokeWidth={2}
+                                            fillOpacity={1} 
+                                            fill="url(#colorB2CRevenue)" 
+                                        />
+                                        <Line
+                                            yAxisId="right"
+                                            type="monotone" 
+                                            dataKey="b2cOrders" 
+                                            stroke="#34d399" 
+                                            strokeWidth={2}
+                                            strokeDasharray="5 5"
+                                            dot={{ fill: '#34d399', strokeWidth: 1, r: 3 }}
+                                            activeDot={{ r: 5 }}
+                                        />
+                                    </>
+                                )}
+                                
+                                {/* B2B Only View */}
+                                {chartView === 'b2b' && (
+                                    <>
+                                        <Area 
+                                            yAxisId="left"
+                                            type="monotone" 
+                                            dataKey="b2bRevenue" 
+                                            stroke="#6366f1" 
+                                            strokeWidth={2}
+                                            fillOpacity={1} 
+                                            fill="url(#colorB2BRevenue)" 
+                                        />
+                                        <Line
+                                            yAxisId="right"
+                                            type="monotone" 
+                                            dataKey="b2bOrders" 
+                                            stroke="#059669" 
+                                            strokeWidth={2}
+                                            dot={{ fill: '#059669', strokeWidth: 1, r: 3 }}
+                                            activeDot={{ r: 5 }}
+                                        />
+                                    </>
+                                )}
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
 
-                {/* Category Distribution */}
-                <div className="bg-white rounded-2xl border border-slate-200 p-6 hover:shadow-lg transition-shadow">
-                    <div className="flex items-center gap-2 mb-2">
-                        <PieChartIcon className="w-5 h-5 text-purple-600" />
-                        <h3 className="text-lg font-semibold text-slate-800">Sales by Category</h3>
-                    </div>
-                    <p className="text-sm text-slate-500 mb-6">Product category distribution</p>
-                    <div className="h-[250px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={categoryData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    paddingAngle={3}
-                                    dataKey="value"
-                                >
-                                    {categoryData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Pie>
-                                <Tooltip 
-                                    contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0' }}
-                                    formatter={(value: number) => [`${value}%`, 'Share']} 
-                                />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-                    <div className="space-y-2 mt-4">
-                        {categoryData.map((cat, i) => (
-                            <div key={cat.name} className="flex items-center justify-between text-sm p-2 rounded-lg hover:bg-slate-50 transition-colors">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i] }} />
-                                    <span className="text-slate-700 font-medium">{cat.name}</span>
-                                </div>
-                                <span className="font-semibold text-slate-800">{cat.value}%</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
+                {/* Business Insights Panel */}
+                <InsightPanel
+                    metrics={{
+                        totalRevenue: platformMetrics?.totalRevenue || 0,
+                        b2bRevenue: platformMetrics?.b2bRevenue || 0,
+                        b2cRevenue: platformMetrics?.b2cRevenue || 0,
+                        totalOrders: platformMetrics?.totalOrders || 0,
+                        b2bOrders: platformMetrics?.b2bOrders || 0,
+                        b2cOrders: platformMetrics?.b2cOrders || 0,
+                        avgOrderValue: platformMetrics?.totalOrders && platformMetrics?.totalRevenue
+                            ? platformMetrics.totalRevenue / platformMetrics.totalOrders
+                            : 0
+                    }}
+                    currency={currency}
+                />
             </div>
 
             {/* Intelligent Store Performance Analysis */}

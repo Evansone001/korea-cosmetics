@@ -16,7 +16,6 @@ interface ProductFormData {
   brand?: string
   manufacturer?: string
   origin?: string
-  stock_quantity?: number
   size?: string
   formula?: string
   how_to_use?: string
@@ -25,23 +24,9 @@ interface ProductFormData {
   skin_types?: string
   skin_concerns?: string
   texture?: string
-  suggested_retail_price?: number
-  minimum_selling_price?: number
-  logistics_mode?: string
-  tax_rate?: number
-  requires_license?: boolean
-  storage_requirements?: string
   images?: string[]
   categories?: string[]
   subcategories?: string[]
-  // Warehouse and pricing fields
-  warehouse_stock?: number
-  b2c_retail_price?: number
-  b2b_wholesale_price?: number
-  b2b_moq?: number
-  customer_type?: 'B2C' | 'B2B' | 'BOTH'
-  is_warehouse_product?: boolean
-  added_by_admin?: boolean
   status?: 'active' | 'inactive' | 'draft'
   featured?: boolean
   meta_title?: string
@@ -83,7 +68,6 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
     brand: '',
     manufacturer: '',
     origin: 'South Korea',
-    stock_quantity: undefined,
     size: '',
     formula: '',
     how_to_use: '',
@@ -92,23 +76,9 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
     skin_types: '',
     skin_concerns: '',
     texture: '',
-    suggested_retail_price: undefined,
-    minimum_selling_price: undefined,
-    logistics_mode: 'WAREHOUSE_TO_STORE',
-    tax_rate: undefined,
-    requires_license: false,
-    storage_requirements: '',
     images: [],
     categories: [],
     subcategories: [],
-    // Warehouse and pricing fields
-    warehouse_stock: undefined,
-    b2c_retail_price: undefined,
-    b2b_wholesale_price: undefined,
-    b2b_moq: undefined,
-    customer_type: 'BOTH',
-    is_warehouse_product: true,
-    added_by_admin: true,
     status: 'draft',
     featured: false,
     meta_title: '',
@@ -151,7 +121,6 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
         brand: existingProduct.brand || '',
         manufacturer: existingProduct.manufacturer || '',
         origin: existingProduct.origin || 'South Korea',
-        stock_quantity: existingProduct.stock_quantity || 0,
         size: existingProduct.size || '',
         formula: existingProduct.formula || '',
         how_to_use: existingProduct.how_to_use || '',
@@ -161,13 +130,6 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
         skin_concerns: existingProduct.skin_concerns || '',
         texture: existingProduct.texture || '',
         images: existingProduct.images || [],
-        warehouse_stock: existingProduct.warehouse_stock || 0,
-        b2c_retail_price: existingProduct.b2c_retail_price || 0,
-        b2b_wholesale_price: existingProduct.b2b_wholesale_price || 0,
-        b2b_moq: existingProduct.b2b_moq || 1,
-        customer_type: existingProduct.customer_type || 'BOTH',
-        is_warehouse_product: existingProduct.is_warehouse_product || true,
-        added_by_admin: existingProduct.added_by_admin || true,
         status: existingProduct.status || 'draft',
         featured: existingProduct.featured || false,
         meta_title: existingProduct.meta_title || '',
@@ -364,14 +326,6 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
       return !value || (typeof value === 'string' && value.trim() === '') || (typeof value === 'number' && value <= 0)
     })
     
-    // Admin-specific business logic validation
-    if (formData.minimum_selling_price && formData.minimum_selling_price >= formData.price) {
-      setValidation(prev => ({
-        ...prev,
-        minimum_selling_price: { isValid: false, message: 'Must be less than regular price' }
-      }))
-      return
-    }
     
     if (missingFields.length > 0) {
       missingFields.forEach(field => {
@@ -404,14 +358,7 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
         ...productData,
         price: parseFloat((formData.price ?? 0).toString()),
         mrp: formData.mrp != null ? parseFloat(formData.mrp.toString()) : null,
-        stock_quantity: parseInt((formData.stock_quantity ?? 0).toString()),
-        warehouse_stock: parseInt((formData.warehouse_stock ?? 0).toString()),
-        b2c_retail_price: formData.b2c_retail_price != null ? parseFloat(formData.b2c_retail_price.toString()) : null,
-        b2b_wholesale_price: formData.b2b_wholesale_price != null ? parseFloat(formData.b2b_wholesale_price.toString()) : null,
-        b2b_moq: parseInt((formData.b2b_moq ?? 1).toString()),
-        tax_rate: formData.tax_rate != null ? parseFloat(formData.tax_rate.toString()) : 0,
-        suggested_retail_price: formData.suggested_retail_price != null ? parseFloat(formData.suggested_retail_price.toString()) : null,
-        minimum_selling_price: formData.minimum_selling_price != null ? parseFloat(formData.minimum_selling_price.toString()) : null,
+        stock_quantity: 0,
         // List fields — schema expects arrays, form stores as comma-separated strings
         key_benefits: toList(formData.key_benefits),
         key_ingredients: toList(formData.key_ingredients),
@@ -425,15 +372,11 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
         formula: strOrNull(formData.formula),
         how_to_use: strOrNull(formData.how_to_use),
         texture: strOrNull(formData.texture),
-        storage_requirements: strOrNull(formData.storage_requirements),
         // Clean up SEO fields
         meta_title: formData.meta_title?.trim() || null,
         meta_description: formData.meta_description?.trim() || null,
         // Set default status if not provided
-        status: formData.status || 'draft',
-        customer_type: formData.customer_type || 'BOTH',
-        is_warehouse_product: formData.is_warehouse_product === true,
-        added_by_admin: formData.added_by_admin === true
+        status: formData.status || 'draft'
       }
 
       const isEditing = !!existingProduct
@@ -662,20 +605,6 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Stock Quantity
-              </label>
-              <input
-                type="number"
-                name="stock_quantity"
-                value={formData.stock_quantity ?? ''}
-                onChange={handleInputChange}
-                min="0"
-                placeholder="e.g. 100"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-              />
-            </div>
           </div>
 
           <div className="mt-4">
@@ -879,22 +808,6 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Customer Type
-              </label>
-              <select
-                name="customer_type"
-                value={formData.customer_type ?? 'BOTH'}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-              >
-                <option value="B2C">B2C (Business to Consumer)</option>
-                <option value="B2B">B2B (Business to Business)</option>
-                <option value="BOTH">Both B2C and B2B</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
                 Status
               </label>
               <select
@@ -923,118 +836,6 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
               </label>
             </div>
 
-            <div className="flex items-center gap-2 mt-6">
-              <input
-                type="checkbox"
-                name="is_warehouse_product"
-                id="is_warehouse_product"
-                checked={formData.is_warehouse_product}
-                onChange={handleInputChange}
-                className="w-4 h-4 text-slate-900 border-slate-300 rounded focus:ring-slate-900"
-              />
-              <label htmlFor="is_warehouse_product" className="text-sm font-medium text-slate-700">
-                Warehouse Product
-              </label>
-            </div>
-          </div>
-        </div>
-
-        {/* Warehouse Pricing */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">Warehouse Pricing</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Warehouse Stock
-              </label>
-              <input
-                type="number"
-                name="warehouse_stock"
-                value={formData.warehouse_stock ?? ''}
-                onChange={handleInputChange}
-                min="0"
-                placeholder="e.g. 500"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Suggested Retail Price
-              </label>
-              <input
-                type="number"
-                name="suggested_retail_price"
-                value={formData.suggested_retail_price ?? ''}
-                onChange={handleInputChange}
-                step="0.01"
-                min="0"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Minimum Selling Price
-              </label>
-              <input
-                type="number"
-                name="minimum_selling_price"
-                value={formData.minimum_selling_price ?? ''}
-                onChange={handleInputChange}
-                step="0.01"
-                min="0"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                B2C Retail Price
-              </label>
-              <input
-                type="number"
-                name="b2c_retail_price"
-                value={formData.b2c_retail_price ?? ''}
-                onChange={handleInputChange}
-                step="0.01"
-                min="0"
-                placeholder="Price for B2C stores"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                B2B Wholesale Price
-              </label>
-              <input
-                type="number"
-                name="b2b_wholesale_price"
-                value={formData.b2b_wholesale_price ?? ''}
-                onChange={handleInputChange}
-                step="0.01"
-                min="0"
-                placeholder="Price for B2B wholesalers"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                B2B Minimum Order Quantity
-              </label>
-              <input
-                type="number"
-                name="b2b_moq"
-                value={formData.b2b_moq ?? ''}
-                onChange={handleInputChange}
-                min="1"
-                placeholder="e.g. 10"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-              />
-            </div>
           </div>
         </div>
 
@@ -1105,7 +906,6 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
                     brand: '',
                     manufacturer: '',
                     origin: 'South Korea',
-                    stock_quantity: undefined,
                     size: '',
                     formula: '',
                     how_to_use: '',
@@ -1114,22 +914,9 @@ export default function ProductForm({ existingProduct, onSave, onCancel, isModal
                     skin_types: '',
                     skin_concerns: '',
                     texture: '',
-                    suggested_retail_price: undefined,
-                    minimum_selling_price: undefined,
-                    logistics_mode: 'WAREHOUSE_TO_STORE',
-                    tax_rate: undefined,
-                    requires_license: false,
-                    storage_requirements: '',
                     images: [],
                     categories: [],
                     subcategories: [],
-                    warehouse_stock: undefined,
-                    b2c_retail_price: undefined,
-                    b2b_wholesale_price: undefined,
-                    b2b_moq: undefined,
-                    customer_type: 'BOTH',
-                    is_warehouse_product: true,
-                    added_by_admin: true,
                     status: 'draft',
                     featured: false,
                     meta_title: '',
