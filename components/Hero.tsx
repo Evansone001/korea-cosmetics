@@ -79,8 +79,8 @@ const Hero = () => {
             try {
                 setLoading(true)
                 const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.FLASK_BACKEND_URL || 'http://localhost:5000';
-                const apiPath = baseUrl.endsWith('/api') ? '/products' : '/api/products';
-                const response = await fetch(`${baseUrl}${apiPath}?featured=true&limit=10`)
+                const apiPath = baseUrl.endsWith('/api') ? '/products/featured' : '/api/products/featured';
+                const response = await fetch(`${baseUrl}${apiPath}?limit=10`)
                 
                 if (response.ok) {
                     const data = await response.json()
